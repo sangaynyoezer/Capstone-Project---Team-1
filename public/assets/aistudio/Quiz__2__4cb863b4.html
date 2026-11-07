@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🌈 Types of AI Recognition System Quiz 🎵</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { --pink: #ff85a2; --blue: #70d6ff; --purple: #be95ff; --yellow: #ffd670; --dark: #2d2d2d; }
+        body { font-family: 'Fredoka', sans-serif; background: #fff5e6; margin: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+        
+        #game-layout { display: flex; width: 98vw; height: 85vh; gap: 20px; padding: 10px; margin-top: 10px;}
+        
+        /* Left: Cartoon Camera */
+        #left-panel { flex: 1.2; position: relative; border-radius: 40px; border: 8px solid var(--dark); overflow: hidden; background: #000; filter: saturate(1.7) contrast(1.2); }
+        #webcam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        
+        /* The Magic Wand Cursor */
+        #cursor {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    font-size: 42px;
+    pointer-events: none;
+    z-index: 50000;
+    display: none;
+    text-shadow: 0 0 10px white;
+    transform: translate(-50%, -50%);
+    transition: left 0.03s linear, top 0.03s linear;
+    will-change: left, top;
+}
+
+        /* Right: Quiz Area */
+        #right-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .card { background: white; border: 6px solid var(--dark); padding: 25px; border-radius: 35px; box-shadow: 8px 8px 0 var(--purple); flex-grow: 1; display: flex; flex-direction: column; justify-content: center; position: relative; }
+        
+        .q-title { font-size: 24px; font-weight: 700; color: var(--dark); margin-bottom: 15px; }
+        
+        /* Grid for Answer Buttons */
+        .options-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        .opt-btn { 
+            background: var(--blue); padding: 18px; border-radius: 20px; font-size: 20px; font-weight: 700; 
+            border: 4px solid var(--dark); box-shadow: 4px 4px 0 var(--dark); cursor: pointer; transition: 0.2s;
+            text-align: center;
+        }
+        .opt-btn.hovering { background: var(--yellow); transform: scale(1.03); }
+
+        /* Screens & Overlays */
+        #start-screen, #feedback-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #start-screen { background: var(--blue); }
+        #feedback-overlay { background: rgba(255, 255, 255, 0.96); display: none; }
+        
+        .cute-btn { background: var(--pink); color: white; padding: 20px 50px; font-size: 28px; border-radius: 30px; border: 5px solid var(--dark); box-shadow: 6px 6px 0 var(--dark); cursor: pointer; }
+
+        /* ===== FINAL SCORE SCREEN ===== */
+        #final-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #70d6ff, #be95ff, #ff85a2);
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .final-card {
+            width: min(650px, 92vw);
+            background: white;
+            border: 7px solid var(--dark);
+            border-radius: 40px;
+            box-shadow: 12px 12px 0 var(--dark);
+            text-align: center;
+            padding: 35px 25px;
+            animation: popIn .5s ease;
+        }
+
+        .final-trophy {
+            font-size: 85px;
+            animation: bounce 1s infinite alternate;
+        }
+
+        .final-card h1 {
+            margin: 5px 0 10px;
+            font-size: 48px;
+            color: var(--dark);
+        }
+
+        .score-label {
+            font-size: 24px;
+            margin: 5px;
+            font-weight: bold;
+        }
+
+        .score-circle {
+            width: 170px;
+            height: 170px;
+            margin: 20px auto 10px;
+            border-radius: 50%;
+            background: var(--yellow);
+            border: 7px solid var(--dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 7px 7px 0 var(--purple);
+        }
+
+        #final-score {
+            font-size: 65px;
+            font-weight: bold;
+        }
+
+        .score-circle small {
+            font-size: 28px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        #final-percentage {
+            font-size: 36px;
+            font-weight: bold;
+            color: var(--pink);
+            margin: 8px;
+        }
+
+        #final-message {
+            font-size: 23px;
+            margin: 10px auto 20px;
+            max-width: 500px;
+        }
+
+        .result-details {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            font-size: 19px;
+            margin: 20px 0 30px;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(.7); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-12px); }
+        }
+
+        @media (max-width: 600px) {
+            .final-card h1 { font-size: 36px; }
+            .final-trophy { font-size: 65px; }
+            .score-circle { width: 140px; height: 140px; }
+            #final-score { font-size: 52px; }
+            .result-details { flex-direction: column; gap: 8px; }
+        }
+
+    
+/* Reliable mouse/touch clicking */
+#quizArea, #quizArea * {
+  pointer-events: auto;
+}
+.answer {
+  position: relative;
+  z-index: 20;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+button, .btn, #nextBtn, #restartBtn, #startBtn {
+  position: relative;
+  z-index: 100;
+  pointer-events: auto !important;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#feedback, #finalScreen {
+  z-index: 200;
+}
+
+
+/* FIXED CLICK LAYER */
+#options-box,
+#options-box .opt-btn {
+    position: relative;
+    z-index: 20;
+    pointer-events: auto !important;
+}
+#feedback-overlay .cute-btn,
+#final-screen .cute-btn {
+    position: relative;
+    z-index: 30000;
+    pointer-events: auto !important;
+}
+#options-box .opt-btn {
+    display: block;
+    width: 100%;
+    font-family: inherit;
+    color: var(--dark);
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+}
+#feedback-overlay,
+#final-screen {
+    pointer-events: auto;
+}
+
+#cursor.hovering {
+    filter: drop-shadow(0 0 8px var(--yellow));
+}
+#cursor.hovering::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 58px;
+    height: 58px;
+    transform: translate(-50%, -50%);
+    border: 4px solid transparent;
+    border-top-color: var(--pink);
+    border-radius: 50%;
+    animation: cursorSpin 1.2s linear infinite;
+}
+@keyframes cursorSpin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+</style>
+</head>
+<body>
+
+    <audio id="bg-music" loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+    <audio id="sound-correct" src="https://www.soundjay.com/buttons/button-09.mp3"></audio>
+    <audio id="sound-wrong" src="https://www.soundjay.com/buttons/button-10.mp3"></audio>
+    
+    <h1 style="color: var(--dark); margin: 5px;">✨ TYPES OF AI RECOGNITION SYSTEMS QUIZ ✨</h1>
+
+    <div id="game-layout">
+        <div id="left-panel">
+            <video id="webcam"></video>
+            <div id="cursor">🪄</div>
+        </div>
+        <div id="right-panel">
+            <div style="font-size: 24px; font-weight: bold; background: white; padding: 10px; border-radius: 20px; border: 3px solid var(--dark); text-align: center;">
+                SCORE: <span id="score-val">0</span> | Q: <span id="q-num">1</span>/<span id="q-total"></span>
+            </div>
+            <div class="card">
+                <div id="q-text" class="q-title">Loading Question...</div>
+                <div id="options-box" class="options-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1 style="font-size: 50px; color: white; text-align: center;">POINT YOUR FINGER<br>TO SELECT ANSWERS!</h1>
+        <button class="cute-btn" onclick="startApp()">START MAGIC 🚀</button>
+    </div>
+
+    <div id="feedback-overlay">
+        <h1 id="fb-title" style="font-size: 70px;"></h1>
+        <p id="fb-desc" style="font-size: 26px; margin-bottom: 30px; text-align: center; max-width: 80%;"></p>
+        <button class="cute-btn" onclick="nextQuestion()">NEXT QUESTION ⮕</button>
+    </div>
+
+<script>
+const video = document.getElementById('webcam');
+const cursor = document.getElementById('cursor');
+const bgMusic = document.getElementById('bg-music');
+const sfxCorrect = document.getElementById('sound-correct');
+const sfxWrong = document.getElementById('sound-wrong');
+
+let qIdx = 0;
+let score = 0;
+let active = false;
+let hoverTime = 0;
+let currentHover = null;
+
+const questions = [
+
+    { q: "A student unlocks a smartphone by looking at its camera. Which type of AI recognition is mainly being used?", a: ["Image recognition", "Speech recognition", "Biometric recognition", "Text recognition"], c: 0 },
+
+    { q: "When Siri or another voice assistant receives a spoken command and interprets the user's words, which type of recognition is mainly involved?", a: ["Image recognition", "Speech recognition", "Biometric recognition", "Object recognition"], c: 1 },
+
+    { q: "A school attendance system scans each student's fingerprint before recording attendance. What type of AI recognition is most directly involved?", a: ["Image recognition", "Speech recognition", "Text recognition", "Biometric recognition"], c: 3 },
+
+    { q: "A CCTV camera analyzes video footage and identifies a person walking through a school gate. Which type of recognition is mainly involved?", a: ["Image recognition", "Speech recognition", "Biometric recognition", "Voice recognition"], c: 0 },
+
+    { q: "Bhutan's Phuentsholing Automated Immigration Clearance System (AICS) uses facial recognition and biometric technology to help verify a person's identity. Which type of recognition is most closely related to this process?", a: ["Speech recognition", "Biometric recognition", "Text recognition", "Sound recognition"], c: 1 },
+
+    { q: "A student uses a phone to convert their spoken answer into written words. Which type of AI recognition is primarily responsible?", a: ["Image recognition", "Biometric recognition", "Speech recognition", "Facial recognition"], c: 2 },
+
+    { q: "A social media application detects and identifies people in a photograph so that they can be tagged. Which type of recognition is mainly being used?", a: ["Image recognition", "Speech recognition", "Biometric recognition", "Voice recognition"], c: 0 },
+
+    { q: "A student says, 'Hey Google, set an alarm for 6:00 AM.' The phone first processes the student's voice to understand the command. Which type of recognition is primarily involved?", a: ["Image recognition", "Speech recognition", "Biometric recognition", "Fingerprint recognition"], c: 1 },
+
+    { q: "A security system uses a camera to examine a person's face and compares facial features with stored information to verify the person's identity. Which answer BEST describes the recognition involved?", a: ["Only speech recognition", "Only text recognition", "Image recognition can analyze the face, while biometric recognition can be used for identity verification", "Speech recognition because the system is identifying a person"], c: 2 },
+
+    { q: "Consider the following: System A identifies whether a picture contains a dog. System B understands a student's spoken question. System C uses a fingerprint to verify a student's identity. Which option correctly matches the systems?", a: ["A–Speech, B–Image, C–Biometric", "A–Image, B–Speech, C–Biometric", "A–Biometric, B–Speech, C–Image", "A–Image, B–Biometric, C–Speech"], c: 1 }
+
+];
+
+document.getElementById('q-total').innerText = questions.length;
+
+function startApp() {
+    document.getElementById('start-screen').style.display = 'none';
+    bgMusic.volume = 0.2;
+    bgMusic.play().catch(() => {});
+    initAI();
+}
+
+async function initAI() {
+    try {
+        const hands = new Hands({
+            locateFile: (file) =>
+                `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.8,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+
+        const cam = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 1280,
+            height: 720
+        });
+
+        cam.start();
+    } catch (err) {
+        console.warn("Hand tracking could not start:", err);
+    }
+
+    loadQuestion();
+}
+
+function onResults(res) {
+    if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
+        cursor.style.display = 'block';
+
+        const tip = res.multiHandLandmarks[0][8];
+
+        const x = (1 - tip.x) * window.innerWidth;
+        const y = tip.y * window.innerHeight;
+
+        cursor.style.left = x + 'px';
+        cursor.style.top = y + 'px';
+
+        checkHover(x, y);
+    } else {
+        cursor.style.display = 'none';
+        currentHover = null;
+    }
+}
+
+function checkHover(x, y) {
+    if (!active) return;
+
+    const target = document.elementFromPoint(x, y);
+    const button = target ? target.closest('.opt-btn') : null;
+    const buttons = document.querySelectorAll('.opt-btn');
+
+    buttons.forEach(b => b.classList.remove('hovering'));
+    cursor.classList.remove('hovering');
+
+    if (button) {
+        button.classList.add('hovering');
+        cursor.classList.add('hovering');
+
+        if (currentHover !== button) {
+            currentHover = button;
+            hoverTime = Date.now();
+        } else if (Date.now() - hoverTime >= 1200) {
+            selectAnswer(Number(button.dataset.idx));
+        }
+    } else {
+        currentHover = null;
+        cursor.classList.remove('hovering');
+    }
+}
+
+function loadQuestion() {
+    active = true;
+    currentHover = null;
+    hoverTime = 0;
+
+    const q = questions[qIdx];
+
+    document.getElementById('q-num').innerText = qIdx + 1;
+    document.getElementById('q-text').innerText = q.q;
+
+    const box = document.getElementById('options-box');
+
+    box.innerHTML = q.a.map((opt, i) =>
+        `<button type="button" class="opt-btn" data-idx="${i}">${opt}</button>`
+    ).join('');
+
+    // Direct click handlers: these are real buttons, so mouse/touch works.
+    box.querySelectorAll('.opt-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectAnswer(Number(this.dataset.idx));
+        });
+
+        button.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectAnswer(Number(this.dataset.idx));
+        }, {passive: false});
+    });
+}
+
+function selectAnswer(i) {
+    if (!active) return;
+
+    active = false;
+    currentHover = null;
+
+    const isCorrect = i === questions[qIdx].c;
+
+    if (isCorrect) {
+        score++;
+        sfxCorrect.currentTime = 0;
+        sfxCorrect.play().catch(() => {});
+        document.getElementById('fb-title').innerText = "CORRECT! 🌟";
+        document.getElementById('fb-title').style.color = "#4CAF50";
+        document.getElementById('fb-desc').innerText =
+            "Great job! You selected the correct answer.";
+    } else {
+        sfxWrong.currentTime = 0;
+        sfxWrong.play().catch(() => {});
+        document.getElementById('fb-title').innerText = "WRONG! ❌";
+        document.getElementById('fb-title').style.color = "#F44336";
+        document.getElementById('fb-desc').innerText =
+            "Good try! The correct answer was: " +
+            questions[qIdx].a[questions[qIdx].c];
+    }
+
+    document.getElementById('score-val').innerText = score;
+    document.getElementById('feedback-overlay').style.display = 'flex';
+}
+
+function nextQuestion() {
+    document.getElementById('feedback-overlay').style.display = 'none';
+    qIdx++;
+
+    if (qIdx < questions.length) {
+        loadQuestion();
+    } else {
+        showFinalScore();
+    }
+}
+
+function showFinalScore() {
+    active = false;
+
+    const total = questions.length;
+    const wrong = total - score;
+    const percentage = Math.round((score / total) * 100);
+
+    document.getElementById('final-score').innerText = score;
+    document.getElementById('final-total').innerText = total;
+    document.getElementById('final-percentage').innerText = percentage + "%";
+    document.getElementById('correct-count').innerText = score;
+    document.getElementById('wrong-count').innerText = wrong;
+
+    let message;
+
+    if (percentage === 100) {
+        message = "🌟 Perfect Score! You got every question correct!";
+    } else if (percentage >= 80) {
+        message = "🎉 Excellent work! You have a very good understanding.";
+    } else if (percentage >= 60) {
+        message = "👏 Good job! A little more practice will make you even stronger.";
+    } else if (percentage >= 40) {
+        message = "📚 Nice effort! Review the concepts and try again.";
+    } else {
+        message = "💪 Keep practicing! You can improve your score next time.";
+    }
+
+    document.getElementById('final-message').innerText = message;
+
+    // Hide the last question and its answer buttons completely.
+    document.getElementById('game-layout').style.visibility = 'hidden';
+    cursor.style.display = 'none';
+
+    document.getElementById('final-screen').style.display = 'flex';
+}
+
+function restartQuiz() {
+    qIdx = 0;
+    score = 0;
+    active = false;
+    currentHover = null;
+    hoverTime = 0;
+
+    document.getElementById('final-screen').style.display = 'none';
+    document.getElementById('feedback-overlay').style.display = 'none';
+    document.getElementById('game-layout').style.visibility = 'visible';
+    document.getElementById('score-val').innerText = '0';
+
+    loadQuestion();
+}
+
+// Mouse/touch fallback: clicking an answer works immediately.
+document.addEventListener('pointerdown', function(e) {
+    const button = e.target.closest('.opt-btn');
+    if (button && active) {
+        selectAnswer(Number(button.dataset.idx));
+    }
+});
+
+// Keyboard support: 1, 2, 3, 4 select answers.
+document.addEventListener('keydown', function(e) {
+    if (!active) return;
+
+    const n = Number(e.key);
+    if (n >= 1 && n <= 4) {
+        selectAnswer(n - 1);
+    }
+});
+</script>
+
+    <!-- FINAL SCORE SCREEN -->
+    <div id="final-screen">
+        <div class="final-card">
+            <div class="final-trophy">🏆</div>
+            <h1>QUIZ COMPLETE!</h1>
+            <p class="score-label">Your Final Score</p>
+            <div class="score-circle">
+                <span id="final-score">0</span>
+                <small>/ <span id="final-total">0</span></small>
+            </div>
+            <p id="final-percentage">0%</p>
+            <p id="final-message">Great effort!</p>
+
+            <div class="result-details">
+                <div>✅ Correct: <strong id="correct-count">0</strong></div>
+                <div>❌ Incorrect: <strong id="wrong-count">0</strong></div>
+            </div>
+
+            <button class="cute-btn" onclick="restartQuiz()">🔄 PLAY AGAIN</button>
+        </div>
+    </div>
+
+</body>
+</html>

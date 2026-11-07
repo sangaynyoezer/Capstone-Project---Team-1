@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/* ----------------- GLOBAL CURSOR & SELECTION FIX ----------------- */
+/* Prevent text caret/I-beam from appearing when clicking titles, headers, cards, or whitespace */
+html, body {
+  caret-color: transparent;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure headings, titles, buttons, badges, and cards never show text selection I-beam */
+h1, h2, h3, h4, h5, h6, button, a, [role="button"], .select-none {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: inherit;
+}
+
+/* Ensure interactive clickable elements show the proper pointer cursor */
+button, a, [role="button"], .cursor-pointer {
+  cursor: pointer;
+}
+
+/* Allow normal text cursor, typing caret, and selection strictly for text inputs and textareas */
+input, textarea, [contenteditable="true"] {
+  caret-color: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}

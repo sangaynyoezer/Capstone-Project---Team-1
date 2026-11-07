@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Facial Expression Recognition</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html { min-height: 100%; background: #050b18; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 30px 18px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      color: #e5f3ff;
+      background:
+        radial-gradient(ellipse at 15% 15%, #123a68 0%, transparent 42%),
+        radial-gradient(ellipse at 85% 85%, #102d50 0%, transparent 42%),
+        #050b18;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0, 195, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 195, 255, 0.08) 1px, transparent 1px);
+      background-size: 35px 35px;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 850px;
+      padding: 30px;
+      text-align: center;
+      background: rgba(7, 16, 33, 0.94);
+      border: 1px solid rgba(0, 195, 255, 0.4);
+      border-radius: 22px;
+      box-shadow: 0 0 30px rgba(0, 195, 255, 0.12), 0 15px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    .top-label { color: #00c3ff; font-size: 11px; letter-spacing: 4px; font-weight: bold; margin-bottom: 12px; }
+
+    h1 { margin: 0 0 12px; color: #67e8ff; font-size: 28px; text-shadow: 0 0 15px rgba(0, 195, 255, 0.4); }
+
+    .description { margin: 0 auto 20px; max-width: 650px; color: #a8c6df; line-height: 1.7; font-size: 14px; }
+
+    .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 auto 22px; }
+
+    .tab {
+      padding: 10px 18px; font-size: 12px; letter-spacing: 1px;
+      color: #a8c6df; background: #0d2036;
+      border: 1px solid #28435f; border-radius: 30px;
+    }
+
+    .tab.active { color: #04101e; background: #67e8ff; border-color: #67e8ff; box-shadow: 0 0 14px rgba(0, 195, 255, 0.3); }
+
+    .camera-heading {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      max-width: 640px; margin: 0 auto 10px;
+      color: #8dbbd9; font-size: 11px; letter-spacing: 2px;
+    }
+
+    .live-indicator { display: inline-flex; align-items: center; gap: 7px; color: #7cfacb; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #62f5c5; box-shadow: 0 0 10px #62f5c5; }
+
+    .camera-box {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      aspect-ratio: 4 / 3;
+      margin: 0 auto;
+      overflow: hidden;
+      border-radius: 16px;
+      background: #151b2b;
+      border: 1px solid rgba(0, 195, 255, 0.35);
+      box-shadow: 0 0 25px rgba(0, 195, 255, 0.08);
+    }
+
+    video {
+      position: absolute; inset: 0; display: block;
+      width: 100%; height: 100%;
+      object-fit: cover; transform: scaleX(-1);
+      z-index: 0; background: #151b2b;
+    }
+
+    canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 1; transform: scaleX(-1);
+      pointer-events: none;
+    }
+
+    .camera-message {
+      position: absolute; inset: 0; z-index: 2;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; padding: 20px;
+      color: #67e8ff; background: #151b2b;
+      line-height: 1.6; font-size: 14px;
+      pointer-events: none;
+    }
+
+    .camera-message .detail { max-width: 460px; font-size: 12px; color: #a8c6df; }
+    .camera-icon { font-size: 44px; color: #67e8ff; text-shadow: 0 0 18px #00c3ff; }
+
+    .popup {
+      position: absolute; top: 18px; left: 50%; z-index: 5;
+      display: none; width: max-content; max-width: 90%;
+      padding: 12px 20px; border-radius: 30px;
+      background: rgba(7, 18, 35, 0.96); color: #67e8ff;
+      border: 1px solid #00c3ff; box-shadow: 0 0 22px rgba(0, 195, 255, 0.25);
+      font-size: 15px; font-weight: bold; transform: translateX(-50%);
+    }
+
+    .popup.show { display: block; animation: appear 0.3s ease; }
+
+    @keyframes appear {
+      from { opacity: 0; transform: translate(-50%, -8px); }
+      to   { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    .overlay {
+      position: absolute; left: 50%; bottom: 18px; z-index: 6;
+      transform: translateX(-50%);
+      width: max-content; max-width: 92%;
+      padding: 10px 18px; border-radius: 24px;
+      background: rgba(7, 18, 35, 0.93);
+      border: 1px solid #00c3ff; color: #67e8ff;
+      font-size: 14px; line-height: 1.5;
+    }
+
+    .hold-bar {
+      position: absolute; left: 0; bottom: 0; z-index: 4;
+      height: 8px; width: 0%;
+      background: #00ff66; box-shadow: 0 0 12px #00ff66;
+      transition: width 0.1s linear;
+    }
+
+    .status { margin: 16px 0; color: #67e8ff; font-size: 13px; min-height: 18px; }
+
+    /* ---------- AI readings (confidence bars) ---------- */
+    .readings {
+      max-width: 640px; margin: 0 auto 14px; padding: 12px 16px;
+      text-align: left; border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(0, 195, 255, 0.2);
+    }
+
+    .readings-title { font-size: 11px; letter-spacing: 2px; color: #8dbbd9; margin-bottom: 8px; }
+
+    .bar-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; color: #a8c6df; }
+    .bar-row > span { width: 130px; flex: none; }
+    .bar-row.on > span { color: #62f5a0; font-weight: bold; }
+
+    .bar-track { position: relative; flex: 1; height: 10px; border-radius: 6px; background: #14263d; overflow: hidden; }
+    .bar-fill { height: 100%; width: 0%; background: #3aa8d8; transition: width 0.12s linear; }
+    .bar-row.on .bar-fill { background: #62f5a0; }
+    .bar-mark { position: absolute; top: 0; bottom: 0; left: 66.67%; width: 2px; background: rgba(255, 255, 255, 0.6); }
+    .bar-hint { margin-top: 6px; font-size: 11px; color: #829bb5; }
+
+    .result {
+      max-width: 640px; margin: 18px auto; padding: 22px;
+      border: 1px solid rgba(0, 195, 255, 0.35); border-radius: 16px;
+      background: linear-gradient(135deg, rgba(13, 35, 65, 0.95), rgba(10, 22, 43, 0.95));
+      box-shadow: inset 0 0 20px rgba(0, 195, 255, 0.04);
+    }
+
+    .result-label { margin-bottom: 10px; color: #91b8d5; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+    .emoji { margin-bottom: 8px; font-size: 36px; }
+    .expression { color: #67e8ff; font-size: 24px; font-weight: bold; text-shadow: 0 0 12px rgba(0, 195, 255, 0.25); }
+
+    .scenario-card {
+      text-align: left; margin-bottom: 14px; padding: 16px 18px;
+      border-left: 4px solid #00c3ff; background: rgba(0, 195, 255, 0.07);
+      border-radius: 8px; font-size: 17px; line-height: 1.6; color: #e5f3ff;
+    }
+
+    .scenario-card small { display: block; margin-bottom: 6px; color: #67e8ff; font-size: 11px; letter-spacing: 2px; }
+    .big-target { font-size: 56px; margin: 4px 0; }
+
+    .progress-line { display: flex; justify-content: space-between; font-size: 12px; color: #8dbbd9; letter-spacing: 1px; margin-bottom: 12px; }
+
+    .timer-track { width: 100%; height: 8px; border-radius: 6px; background: #14263d; overflow: hidden; margin: 10px 0; }
+    .timer-fill { height: 100%; width: 100%; background: #67e8ff; transition: width 0.1s linear; }
+
+    .ai-sees { font-size: 13px; color: #a8c6df; margin-top: 6px; min-height: 20px; line-height: 1.6; }
+
+    .verdict { font-size: 22px; font-weight: bold; margin: 6px 0; }
+    .verdict.win { color: #62f5a0; }
+    .verdict.miss { color: #ffb86b; }
+
+    .reflect { text-align: left; margin-top: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.6; color: #cfe4f5; background: rgba(255, 255, 255, 0.04); border-radius: 8px; }
+    .reflect b { color: #67e8ff; }
+
+    .setup-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin-bottom: 14px; }
+    .setup-row input { padding: 11px 14px; font-size: 14px; border-radius: 9px; border: 1px solid #3d5976; background: #0d2036; color: #e5f3ff; min-width: 200px; }
+
+    .scoreboard { margin-top: 16px; text-align: left; font-size: 13px; color: #a8c6df; }
+    .scoreboard table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    .scoreboard th, .scoreboard td { padding: 6px 8px; border-bottom: 1px solid #1d3550; text-align: left; }
+    .scoreboard th { color: #67e8ff; font-size: 11px; letter-spacing: 1px; }
+
+    .buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 20px; }
+
+    button { padding: 13px 24px; border: none; border-radius: 9px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    button:hover { transform: translateY(-2px); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .start-btn { color: #04101e; background: #67e8ff; box-shadow: 0 0 15px rgba(0, 195, 255, 0.25); }
+    .stop-btn { color: #e5f3ff; background: #20324a; border: 1px solid #3d5976; }
+    .go-btn { color: #04101e; background: #62f5a0; }
+
+    .note { margin-top: 20px; color: #829bb5; font-size: 11px; line-height: 1.6; }
+    .footer-label { margin-top: 20px; color: #456a8c; font-size: 10px; letter-spacing: 3px; }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .container { padding: 18px; }
+      h1 { font-size: 23px; }
+      .expression { font-size: 20px; }
+      .top-label { letter-spacing: 2px; }
+      .scenario-card { font-size: 15px; }
+      .bar-row > span { width: 105px; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <div class="top-label">ARTIFICIAL INTELLIGENCE SYSTEM</div>
+    <h1>AI Facial Expression Recognition</h1>
+
+    <p class="description" id="modeDescription">
+      Start your camera and try different facial expressions.
+      The system will display the expression it detects.
+    </p>
+
+    <div class="tabs">
+      <button class="tab active" data-mode="free">FREE PLAY</button>
+      <button class="tab" data-mode="scenario">SCENARIO CHALLENGE</button>
+      <button class="tab" data-mode="quick">QUICK MIRROR</button>
+    </div>
+
+    <div class="camera-heading">
+      <span>CAMERA INTERFACE</span>
+      <span class="live-indicator"><span class="live-dot"></span><span id="liveLabel">STANDBY</span></span>
+    </div>
+
+    <div class="camera-box" id="cameraBox">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+
+      <div id="cameraMessage" class="camera-message">
+        <div class="camera-icon">⌁</div>
+        <div>Camera system on standby</div>
+        <div>Press START CAMERA to begin</div>
+      </div>
+
+      <div id="popup" class="popup">Expression detected</div>
+      <div id="overlay" class="overlay hidden"></div>
+      <div id="holdBar" class="hold-bar"></div>
+    </div>
+
+    <div id="status" class="status">System waiting for camera access...</div>
+
+    <div id="readings" class="readings hidden">
+      <div class="readings-title">WHAT THE AI MEASURES <span id="calState"></span></div>
+      <div class="bar-row" data-key="happy"><span>😊 Happy</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+      <div class="bar-row" data-key="surprised"><span>😲 Surprised-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+      <div class="bar-row" data-key="sad"><span>😢 Sad-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+      <div class="bar-row" data-key="angry"><span>😠 Angry-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+      <div class="bar-hint">An expression is recognised when its bar passes the white line.</div>
+    </div>
+
+    <!-- FREE PLAY PANEL -->
+    <section id="freePanel" class="result">
+      <div class="result-label">Detected Expression</div>
+      <div id="emoji" class="emoji">◉</div>
+      <div id="expression" class="expression">System Standby</div>
+    </section>
+
+    <!-- CHALLENGE PANEL (scenario + quick mirror) -->
+    <section id="challengePanel" class="result hidden"></section>
+
+    <div class="buttons">
+      <button id="startBtn" class="start-btn">START CAMERA</button>
+      <button id="stopBtn" class="stop-btn" disabled>STOP CAMERA</button>
+      <button id="recalBtn" class="stop-btn" disabled>RECALIBRATE</button>
+      <button id="readingsBtn" class="stop-btn">SHOW AI READINGS</button>
+    </div>
+
+    <p class="note">
+      Educational demonstration only. Facial movements cannot reliably
+      establish a person's actual emotions. Camera access requires permission.
+      Nothing is recorded or sent anywhere: the camera image stays on this device.
+    </p>
+
+    <div class="footer-label">AI VISION • REAL-TIME DETECTION</div>
+  </main>
+
+  <script type="module">
+    /* ==========================================================
+       1. CONFIGURATION  (all tuning values live here)
+       ========================================================== */
+    /*PURE-START*/
+    const CONFIG = {
+      smoothing: 0.5,          // blendshape smoothing: 0 = very smooth, 1 = no smoothing
+      stableMs: 350,           // a new expression must persist this long before it is displayed
+
+      calibration: {
+        durationMs: 1500,      // how long the relaxed face is measured
+        minFrames: 10,
+        retries: 2,            // asks for a calmer face this many times if the face was not neutral
+        maxBaseline: 0.30      // a resting value is never subtracted by more than this
+      },
+
+      quality: {
+        minFaceWidth: 0.20,    // face must fill at least 20% of the frame width
+        edgeMargin: 0.01,      // face must not touch the frame edge
+        yawMin: 0.33,          // nose position between the cheeks: 0.5 = looking straight at camera
+        yawMax: 0.67
+      },
+
+      // A cue that MUST be present before an expression can be considered
+      gates: {
+        happySmile: 0.18,
+        surpriseJaw: 0.15, surpriseEye: 0.08, surpriseBrow: 0.20,
+        angryBrowDown: 0.15,
+        sadFrown: 0.10, sadBrowInner: 0.25
+      },
+
+      // Score an expression needs to count as "recognised" (white line on the bars)
+      thresholds: { happy: 0.25, surprised: 0.28, angry: 0.16, sad: 0.18 },
+
+      minMargin: 0.10          // if two expressions both qualify, the winner must lead by this much
+    };
+
+    const clamp01 = v => Math.max(0, Math.min(1, v));
+
+    // Turns blendshape values (0..1, baseline already removed) into named facial features
+    function extractFeatures(b) {
+      const g = name => b[name] || 0;
+      const avg = name => (g(name + "Left") + g(name + "Right")) / 2;
+
+      return {
+        smile: avg("mouthSmile"),
+        cheekSquint: avg("cheekSquint"),
+        frown: avg("mouthFrown"),
+        mouthPress: avg("mouthPress"),
+        chinRaise: g("mouthShrugLower"),
+        jawOpen: g("jawOpen"),
+        browDown: avg("browDown"),
+        browInnerUp: g("browInnerUp"),
+        browOuterUp: avg("browOuterUp"),
+        eyeWide: avg("eyeWide"),
+        eyeSquint: avg("eyeSquint"),
+        noseSneer: avg("noseSneer")
+      };
+    }
+
+    // One score per expression. Each expression needs its gate cue, and is
+    // reduced by cues that belong to competing expressions.
+    function scoreExpressions(f) {
+      const G = CONFIG.gates;
+      const browUp = Math.max(f.browInnerUp, f.browOuterUp);
+      const score = { happy: 0, surprised: 0, angry: 0, sad: 0 };
+
+      if (f.smile >= G.happySmile) {
+        score.happy = 0.75 * f.smile + 0.25 * f.cheekSquint;
+      }
+
+      if (f.jawOpen >= G.surpriseJaw && (f.eyeWide >= G.surpriseEye || browUp >= G.surpriseBrow)) {
+        score.surprised =
+          0.40 * f.jawOpen + 0.30 * f.eyeWide +
+          0.15 * f.browInnerUp + 0.15 * f.browOuterUp -
+          0.60 * f.smile;
+      }
+
+      if (f.browDown >= G.angryBrowDown) {
+        score.angry =
+          0.40 * f.browDown + 0.20 * f.noseSneer + 0.15 * f.eyeSquint +
+          0.15 * f.mouthPress + 0.10 * f.frown -
+          0.60 * f.smile - 0.30 * f.browInnerUp;
+      }
+
+      if (f.frown >= G.sadFrown || f.browInnerUp >= G.sadBrowInner) {
+        score.sad =
+          0.35 * f.browInnerUp + 0.35 * f.frown + 0.15 * f.chinRaise +
+          0.15 * f.mouthPress -
+          0.60 * f.smile - 0.50 * f.jawOpen - 0.40 * f.eyeWide - 0.40 * f.browDown;
+      }
+
+      for (const k in score) score[k] = Math.max(0, score[k]);
+      return score;
+    }
+
+    // ratio 1.0 means "exactly at the recognition threshold"
+    function scoresToRatios(score) {
+      const T = CONFIG.thresholds;
+      return {
+        happy: score.happy / T.happy,
+        surprised: score.surprised / T.surprised,
+        angry: score.angry / T.angry,
+        sad: score.sad / T.sad
+      };
+    }
+
+    // Picks the winning expression, or "neutral" when nothing is clear
+    function decideExpression(ratios) {
+      const ranked = Object.entries(ratios).sort((a, b) => b[1] - a[1]);
+      const [topKey, topRatio] = ranked[0];
+      const secondRatio = ranked[1][1];
+
+      if (topRatio < 1) return "neutral";
+      if (secondRatio >= 1 && topRatio - secondRatio < CONFIG.minMargin) return "neutral";
+      return topKey;
+    }
+    /*PURE-END*/
+
+    const EXPRESSIONS = {
+      happy:     { label: "Happy",                     name: "Happy",             emoji: "😊", popup: "Happy expression detected!" },
+      surprised: { label: "Surprised-like Expression", name: "Surprised-like",    emoji: "😲", popup: "Surprised expression detected!" },
+      sad:       { label: "Sad-like Expression",       name: "Sad-like",          emoji: "😢", popup: "Sad-like expression detected!" },
+      angry:     { label: "Angry-like Expression",     name: "Angry-like",        emoji: "😠", popup: "Angry-like expression detected!" },
+      neutral:   { label: "Neutral / Unclear",         name: "Neutral / unclear", emoji: "😐", popup: "No clear expression detected." }
+    };
+
+    /* ==========================================================
+       2. MODEL SOURCES  (tries each in order until one works)
+       ========================================================== */
+    const MP_VERSION = "0.10.14";
+    const JSDELIVR = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`;
+    const UNPKG = `https://unpkg.com/@mediapipe/tasks-vision@${MP_VERSION}`;
+    const MODEL_URL =
+      "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+    const SOURCES = [
+      // Optional offline copy: put the files in a "mediapipe" folder next to this page
+      { name: "local folder", bundle: "./mediapipe/vision_bundle.mjs", wasm: "./mediapipe/wasm", model: "./mediapipe/face_landmarker.task" },
+      { name: "jsDelivr",     bundle: `${JSDELIVR}/vision_bundle.mjs`, wasm: `${JSDELIVR}/wasm`, model: MODEL_URL },
+      { name: "unpkg",        bundle: `${UNPKG}/vision_bundle.mjs`,    wasm: `${UNPKG}/wasm`,    model: MODEL_URL }
+    ];
+
+    const LOAD_TIMEOUT_MS = 25000;
+    const MAX_DETECT_ERRORS = 8;
+
+    /* ==========================================================
+       3. PAGE ELEMENTS + STATE
+       ========================================================== */
+    const $ = id => document.getElementById(id);
+
+    const video = $("video");
+    const canvas = $("canvas");
+    const ctx = canvas.getContext("2d");
+    const cameraBox = $("cameraBox");
+    const cameraMessage = $("cameraMessage");
+    const popup = $("popup");
+    const overlay = $("overlay");
+    const holdBar = $("holdBar");
+    const statusText = $("status");
+    const liveLabel = $("liveLabel");
+    const emojiText = $("emoji");
+    const expressionText = $("expression");
+    const freePanel = $("freePanel");
+    const challengePanel = $("challengePanel");
+    const modeDescription = $("modeDescription");
+    const readingsBox = $("readings");
+    const calState = $("calState");
+    const startBtn = $("startBtn");
+    const stopBtn = $("stopBtn");
+    const recalBtn = $("recalBtn");
+    const readingsBtn = $("readingsBtn");
+
+    let mode = "free";
+    let mpModule = null;        // loaded MediaPipe module
+    let activeSource = null;
+    let delegate = "GPU";
+    let landmarker = null;
+    let cameraStream = null;
+    let rafId = null;
+    let running = false;
+    let starting = false;
+    let rebuilding = false;
+    let lastVideoTime = -1;
+    let lastTimestamp = 0;
+    let detectErrors = 0;
+    let popupTimer = null;
+
+    // Expression tracking
+    let smoothed = {};          // smoothed blendshape values
+    let candidateKey = null;    // expression currently being "confirmed"
+    let candidateSince = 0;
+    let stableKey = null;       // confirmed expression shown to the user
+
+    // Calibration (each person's relaxed face is measured and removed)
+    const cal = { status: "idle", startedAt: 0, sums: {}, count: 0, attempts: 0, baseline: {} };
+
+    const canPlay = () => running && cal.status === "done";
+
+    /* ==========================================================
+       4. SMALL UI HELPERS
+       ========================================================== */
+    function setStatus(text) { statusText.textContent = text; }
+
+    function showOverlay(text) { overlay.textContent = text; overlay.classList.remove("hidden"); }
+    function hideOverlay() { overlay.classList.add("hidden"); }
+
+    function setCameraMessage(icon, title, detail) {
+      cameraMessage.replaceChildren();
+      const add = (cls, text) => {
+        const div = document.createElement("div");
+        if (cls) div.className = cls;
+        div.textContent = text;
+        cameraMessage.appendChild(div);
+      };
+      add("camera-icon", icon);
+      add("", title);
+      if (detail) add("detail", detail);
+      cameraMessage.style.display = "flex";
+    }
+
+    function setFreeReading(emoji, text) {
+      emojiText.textContent = emoji;
+      expressionText.textContent = text;
+    }
+
+    function updateReadings(ratios, activeKey) {
+      readingsBox.querySelectorAll(".bar-row").forEach(row => {
+        const key = row.dataset.key;
+        const ratio = ratios ? ratios[key] || 0 : 0;
+        row.querySelector(".bar-fill").style.width = Math.min(ratio, 1.5) / 1.5 * 100 + "%";
+        row.classList.toggle("on", activeKey === key);
+      });
+    }
+
+    function updateCalState() {
+      calState.textContent = cal.status === "done" ? "• calibrated ✔" : "";
+    }
+
+    /* ==========================================================
+       5. LOADING THE FACE MODEL (with fallbacks)
+       ========================================================== */
+    function withTimeout(promise, ms, message) {
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      });
+      return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+    }
+
+    async function buildLandmarker(source, wantedDelegate) {
+      const mp = await import(source.bundle);
+      const fileset = await mp.FilesetResolver.forVisionTasks(source.wasm);
+
+      const instance = await mp.FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: source.model, delegate: wantedDelegate },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: false
+      });
+
+      mpModule = mp;
+      return instance;
+    }
+
+    async function loadModel() {
+      const failures = [];
+
+      for (const source of SOURCES) {
+        for (const wantedDelegate of ["GPU", "CPU"]) {
+          try {
+            setStatus(`Loading AI vision model (${source.name}, ${wantedDelegate})...`);
+            const instance = await withTimeout(
+              buildLandmarker(source, wantedDelegate),
+              LOAD_TIMEOUT_MS,
+              "timed out"
+            );
+            activeSource = source;
+            delegate = wantedDelegate;
+            console.info(`Face model loaded from ${source.name} using ${wantedDelegate}.`);
+            return instance;
+          } catch (error) {
+            console.warn(`Model load failed: ${source.name} / ${wantedDelegate}`, error);
+            failures.push(`${source.name} (${wantedDelegate}): ${error.message || error}`);
+            // a missing local folder or blocked network will not be fixed by CPU, skip ahead
+            if (!/GPU|delegate|WebGL/i.test(String(error.message || error))) break;
+          }
+        }
+      }
+
+      const loadError = new Error("model-load-failed");
+      loadError.failures = failures;
+      throw loadError;
+    }
+
+    async function switchToCpu() {
+      if (rebuilding || delegate === "CPU" || !activeSource) return;
+      rebuilding = true;
+      setStatus("Switching to a more compatible detection mode...");
+
+      try {
+        landmarker?.close?.();
+        landmarker = null;
+        landmarker = await withTimeout(buildLandmarker(activeSource, "CPU"), LOAD_TIMEOUT_MS, "timed out");
+        delegate = "CPU";
+        detectErrors = 0;
+      } catch (error) {
+        console.error("CPU fallback failed:", error);
+        stopCamera("Face detection could not start on this device.");
+      } finally {
+        rebuilding = false;
+      }
+    }
+
+    /* ==========================================================
+       6. FACE ANALYSIS PIPELINE
+          camera frame -> landmarks -> quality check -> smoothing
+          -> baseline removal -> features -> scores -> decision
+       ========================================================== */
+    function nextTimestamp() {
+      const now = performance.now();
+      lastTimestamp = now > lastTimestamp ? now : lastTimestamp + 1;
+      return lastTimestamp;
+    }
+
+    function faceBounds(landmarks) {
+      let minX = 1, minY = 1, maxX = 0, maxY = 0;
+      for (const p of landmarks) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
+      return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+    }
+
+    // Is the face big enough, fully visible and looking at the camera?
+    function assessQuality(landmarks, bounds) {
+      const Q = CONFIG.quality;
+
+      if (bounds.width < Q.minFaceWidth) return { ok: false, message: "Move a little closer to the camera" };
+
+      if (bounds.minX < Q.edgeMargin || bounds.maxX > 1 - Q.edgeMargin ||
+          bounds.minY < Q.edgeMargin || bounds.maxY > 1 - Q.edgeMargin) {
+        return { ok: false, message: "Keep your whole face inside the camera view" };
+      }
+
+      const nose = landmarks[1], cheekA = landmarks[234], cheekB = landmarks[454];
+      const left = Math.min(cheekA.x, cheekB.x);
+      const span = Math.abs(cheekA.x - cheekB.x);
+      const yaw = span > 0 ? (nose.x - left) / span : 0.5;
+
+      if (yaw < Q.yawMin || yaw > Q.yawMax) return { ok: false, message: "Face the camera straight on" };
+
+      return { ok: true, message: "" };
+    }
+
+    function smoothBlendshapes(categories) {
+      const alpha = CONFIG.smoothing;
+      for (const item of categories) {
+        const previous = smoothed[item.categoryName];
+        smoothed[item.categoryName] =
+          previous === undefined ? item.score : previous + alpha * (item.score - previous);
+      }
+      return smoothed;
+    }
+
+    function removeBaseline(values) {
+      const adjusted = {};
+      for (const name in values) {
+        adjusted[name] = clamp01(values[name] - (cal.baseline[name] || 0));
+      }
+      return adjusted;
+    }
+
+    function resetTracking() {
+      smoothed = {};
+      candidateKey = null;
+      candidateSince = 0;
+      stableKey = null;
+    }
+
+    // Only changes the displayed expression after it has been steady for a moment
+    function stabilize(key, now) {
+      if (key !== candidateKey) {
+        candidateKey = key;
+        candidateSince = now;
+        return;
+      }
+      if (now - candidateSince >= CONFIG.stableMs && key !== stableKey) {
+        stableKey = key;
+        onStableExpression(key);
+      }
+    }
+
+    function onStableExpression(key) {
+      if (mode !== "free") return;
+      const info = EXPRESSIONS[key];
+      setFreeReading(info.emoji, info.label);
+
+      if (key !== "neutral") {
+        popup.textContent = info.popup;
+        popup.classList.add("show");
+        clearTimeout(popupTimer);
+        popupTimer = setTimeout(() => popup.classList.remove("show"), 1800);
+      } else {
+        popup.classList.remove("show");
+      }
+    }
+
+    /* ---------- Calibration ---------- */
+    function startCalibration() {
+      cal.status = "collecting";
+      cal.startedAt = 0;
+      cal.sums = {};
+      cal.count = 0;
+      cal.attempts = 0;
+      cal.baseline = {};
+      resetTracking();
+      updateCalState();
+      recalBtn.disabled = true;
+      if (mode !== "free") resetChallenge();
+      else setFreeReading("🧘", "Calibrating...");
+    }
+
+    function collectCalibration(values, now) {
+      if (!cal.startedAt) cal.startedAt = now;
+
+      for (const name in values) cal.sums[name] = (cal.sums[name] || 0) + values[name];
+      cal.count++;
+
+      const progress = Math.min(1, (now - cal.startedAt) / CONFIG.calibration.durationMs);
+      const prefix = cal.attempts > 0 ? "Please keep a calm, neutral face... " : "Relax your face and look at the camera... ";
+      showOverlay(prefix + Math.round(progress * 100) + "%");
+
+      if (progress >= 1 && cal.count >= CONFIG.calibration.minFrames) finishCalibration();
+    }
+
+    function finishCalibration() {
+      const mean = {};
+      for (const name in cal.sums) mean[name] = cal.sums[name] / cal.count;
+
+      const f = extractFeatures(mean);
+      const relaxed = f.smile < 0.25 && f.jawOpen < 0.25 && f.eyeWide < 0.25 && f.browDown < 0.30;
+
+      if (!relaxed && cal.attempts < CONFIG.calibration.retries) {
+        cal.attempts++;
+        cal.startedAt = 0;
+        cal.sums = {};
+        cal.count = 0;
+        return;
+      }
+
+      const cap = CONFIG.calibration.maxBaseline;
+      cal.baseline = {};
+      for (const name in mean) cal.baseline[name] = Math.min(mean[name], cap);
+
+      cal.status = "done";
+      resetTracking();
+      hideOverlay();
+      updateCalState();
+      recalBtn.disabled = false;
+      setStatus("AI vision active • Calibrated");
+      setFreeReading("👀", "Detecting...");
+      if (mode !== "free" && ch.phase === "setup") renderChallenge();
+    }
+
+    /* ---------- Per-frame handlers ---------- */
+    function onFaceLost() {
+      resetTracking();
+      cal.startedAt = 0;
+      cal.sums = {};
+      cal.count = 0;
+
+      updateReadings(null, null);
+      handleChallengeFrame(null);
+      popup.classList.remove("show");
+      liveLabel.textContent = "SCANNING";
+
+      if (cal.status === "collecting") {
+        showOverlay("Looking for your face...");
+        setStatus("AI vision active • Looking for a face...");
+      } else {
+        setStatus("AI vision active • Looking for a face...");
+        if (mode === "free") setFreeReading("👤", "No face detected");
+      }
+    }
+
+    function onPoorQuality(message) {
+      resetTracking();
+      cal.startedAt = 0;
+      cal.sums = {};
+      cal.count = 0;
+
+      updateReadings(null, null);
+      handleChallengeFrame(null);
+      popup.classList.remove("show");
+      liveLabel.textContent = "LIVE";
+      setStatus(message);
+
+      if (cal.status === "collecting") showOverlay(message);
+      else if (mode === "free") setFreeReading("↔", "Adjust your position");
+    }
+
+    function processResult(result) {
+      const now = performance.now();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const landmarks = result.faceLandmarks && result.faceLandmarks[0];
+      const categories = result.faceBlendshapes && result.faceBlendshapes[0] && result.faceBlendshapes[0].categories;
+
+      if (!landmarks || !categories) { onFaceLost(); return; }
+
+      const bounds = faceBounds(landmarks);
+      const quality = assessQuality(landmarks, bounds);
+      drawFace(landmarks, bounds, quality.ok);
+
+      if (!quality.ok) { onPoorQuality(quality.message); return; }
+
+      liveLabel.textContent = "LIVE";
+      const values = smoothBlendshapes(categories);
+
+      if (cal.status === "collecting") {
+        setStatus("AI vision active • Calibrating...");
+        collectCalibration(values, now);
+        return;
+      }
+
+      const features = extractFeatures(removeBaseline(values));
+      const ratios = scoresToRatios(scoreExpressions(features));
+      const key = decideExpression(ratios);
+
+      stabilize(key, now);
+      updateReadings(ratios, key);
+      handleChallengeFrame(key);
+      setStatus("AI vision active • Face detected");
+    }
+
+    function drawFace(landmarks, bounds, ok) {
+      const color = ok ? "#00ff66" : "#ffb86b";
+      const pad = 0.04;
+
+      const x = Math.max(0, (bounds.minX - pad) * canvas.width);
+      const y = Math.max(0, (bounds.minY - pad) * canvas.height);
+      const w = Math.min(canvas.width - x, (bounds.width + pad * 2) * canvas.width);
+      const h = Math.min(canvas.height - y, (bounds.height + pad * 2) * canvas.height);
+
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(x, y, w, h);
+
+      for (let i = 0; i < landmarks.length; i += 8) {
+        ctx.beginPath();
+        ctx.arc(landmarks[i].x * canvas.width, landmarks[i].y * canvas.height, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+    }
+
+    /* ---------- Main loop ---------- */
+    function detectLoop() {
+      if (!running) return;
+      rafId = requestAnimationFrame(detectLoop);
+
+      if (!landmarker || rebuilding) return;
+      if (video.readyState < 2 || video.currentTime === lastVideoTime) return;
+      lastVideoTime = video.currentTime;
+
+      let result;
+      try {
+        result = landmarker.detectForVideo(video, nextTimestamp());
+        detectErrors = 0;
+      } catch (error) {
+        detectErrors++;
+        console.error("Detection error:", error);
+        if (detectErrors === 3 && delegate === "GPU") switchToCpu();
+        else if (detectErrors >= MAX_DETECT_ERRORS) stopCamera("Face detection stopped working. Please start the camera again.");
+        return;
+      }
+
+      processResult(result);
+    }
+
+    /* ==========================================================
+       7. CAMERA START / STOP
+       ========================================================== */
+    function describeError(error) {
+      if (error && error.message === "model-load-failed") {
+        return {
+          title: "Could not load the AI model",
+          detail: "The page needs internet to download the face model (or a local copy in a 'mediapipe' folder). " +
+                  "Check the connection, and ask whether the school network blocks cdn.jsdelivr.net, unpkg.com or storage.googleapis.com."
+        };
+      }
+
+      switch (error && error.name) {
+        case "NotAllowedError":
+        case "SecurityError":
+          return { title: "Camera permission was blocked", detail: "Click the camera icon in the address bar, allow the camera, then press START CAMERA again." };
+        case "NotFoundError":
+        case "DevicesNotFoundError":
+          return { title: "No camera found", detail: "Connect a camera and press START CAMERA again." };
+        case "NotReadableError":
+        case "TrackStartError":
+          return { title: "The camera is busy", detail: "Another app or browser tab may be using it. Close it and try again." };
+        case "OverconstrainedError":
+          return { title: "Camera settings not supported", detail: "Try a different camera and press START CAMERA again." };
+        default:
+          return { title: "Camera unavailable", detail: (error && error.message) || "Check browser permissions and your connection." };
+      }
+    }
+
+    async function startCamera() {
+      if (starting || running) return;
+      starting = true;
+      startBtn.disabled = true;
+
+      try {
+        if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          const err = new Error("Camera access needs HTTPS or localhost. Open this page from a local server or a secure website.");
+          err.name = "SecurityContext";
+          throw err;
+        }
+
+        if (!landmarker) landmarker = await loadModel();
+
+        setStatus("Starting camera...");
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
+        });
+
+        const track = cameraStream.getVideoTracks()[0];
+        if (track) track.addEventListener("ended", () => stopCamera("The camera was disconnected."));
+
+        video.srcObject = cameraStream;
+        await video.play();
+
+        const w = video.videoWidth || 640;
+        const h = video.videoHeight || 480;
+        canvas.width = w;
+        canvas.height = h;
+        cameraBox.style.aspectRatio = `${w} / ${h}`;
+
+        running = true;
+        lastVideoTime = -1;
+        detectErrors = 0;
+
+        cameraMessage.style.display = "none";
+        liveLabel.textContent = "LIVE";
+        stopBtn.disabled = false;
+        popup.classList.remove("show");
+
+        startCalibration();
+        detectLoop();
+      } catch (error) {
+        console.error("Start error:", error);
+        const info = describeError(error);
+        releaseCamera();
+        setCameraMessage("!", info.title, info.detail);
+        setStatus(info.title);
+        liveLabel.textContent = "STANDBY";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      } finally {
+        starting = false;
+      }
+    }
+
+    function releaseCamera() {
+      running = false;
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+      video.srcObject = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function stopCamera(message) {
+      releaseCamera();
+      resetTracking();
+      cal.status = "idle";
+      updateCalState();
+      hideOverlay();
+      updateReadings(null, null);
+
+      setCameraMessage("⌁", "Camera system on standby", "Press START CAMERA to begin");
+      popup.classList.remove("show");
+      clearTimeout(popupTimer);
+
+      setFreeReading("◉", "System Standby");
+      setStatus(typeof message === "string" ? message : "System waiting for camera access...");
+      liveLabel.textContent = "STANDBY";
+
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      recalBtn.disabled = true;
+
+      if (mode !== "free" && ch.phase !== "summary") resetChallenge();
+    }
+
+    /* ==========================================================
+       8. ACTIVITIES  (teachers: edit the lists below)
+          accepted = which expressions the AI will accept
+       ========================================================== */
+    const SCENARIOS = [
+      { text: "You studied really hard and your teacher announces you got full marks on the test.", accepted: ["happy"] },
+      { text: "You are walking alone in the corridor when a friend jumps out and shouts \"BOO!\"", accepted: ["surprised"] },
+      { text: "Your best friend tells you they are moving to a different town next week.", accepted: ["sad"] },
+      { text: "Someone tears up the poster you worked on for a whole week, and they did it on purpose.", accepted: ["angry"] },
+      { text: "You open a birthday gift and it is exactly the thing you wanted most.", accepted: ["happy", "surprised"] },
+      { text: "Your teacher says the school picnic you were looking forward to is cancelled.", accepted: ["sad"] },
+      { text: "A classmate cuts in front of you in the queue again, even after you asked them not to.", accepted: ["angry"] },
+      { text: "The lights suddenly go out and there is a loud clap of thunder right outside.", accepted: ["surprised"] },
+      { text: "Your team scores the winning goal in the last second of the inter-house football match.", accepted: ["happy", "surprised"] },
+      { text: "You cannot find the pen your grandmother gave you. You have looked everywhere.", accepted: ["sad"] },
+      { text: "You find out a classmate has been spreading a lie about you.", accepted: ["angry"] },
+      { text: "You walk into class and everyone has secretly decorated the room for your birthday.", accepted: ["surprised", "happy"] }
+    ];
+
+    const QUICK_TARGETS = [
+      { text: "Show a HAPPY face", accepted: ["happy"], big: "😊" },
+      { text: "Show a SURPRISED face", accepted: ["surprised"], big: "😲" },
+      { text: "Show a SAD face", accepted: ["sad"], big: "😢" },
+      { text: "Show an ANGRY face", accepted: ["angry"], big: "😠" }
+    ];
+
+    const REFLECTIONS = [
+      "Would every student in your class show this scenario in exactly the same way? Why or why not?",
+      "Can a person feel this emotion without showing it on their face? What does that mean for an AI that only looks at faces?",
+      "What might make the AI misread your face (lighting, glasses, culture, personality)?",
+      "Did the AI agree with how you acted? If it did not, who is right: you or the AI?",
+      "Is it fair to use a system like this to judge how people really feel, for example in a classroom or an interview?",
+      "What data do you think this AI was trained on? Could it work worse for some people than for others?"
+    ];
+
+    const SCENARIO_ROUND_LENGTH = 6;
+    const QUICK_ROUND_LENGTH = 8;
+    const HOLD_MS = 800;     // how long an expression must be held
+    const GRACE_MS = 300;    // short flicker tolerance while holding
+
+    const MODE_TEXT = {
+      free: "Start your camera and try different facial expressions. The system will display the expression it detects.",
+      scenario: "Read the scenario, imagine you are in that situation, then show the expression you would have. Hold it steady and see if the AI agrees!",
+      quick: "A fast challenge! The AI names an expression and you have a few seconds to show it. Hold it steady to score points."
+    };
+
+    const ch = {
+      kind: "scenario", phase: "setup", items: [], idx: 0, score: 0, hits: 0,
+      timeLimit: 10, startedAt: 0, holdStart: 0, lastGood: 0, lastSeen: null,
+      timerId: null, player: "", lastResult: null, reflection: ""
+    };
+
+    const sessionScores = [];   // kept in memory only; cleared when the page is refreshed
+
+    const escapeHTML = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    const acceptedText = keys => keys.map(k => EXPRESSIONS[k].emoji + " " + EXPRESSIONS[k].name).join(" or ");
+
+    function clearTimer() {
+      if (ch.timerId) { clearInterval(ch.timerId); ch.timerId = null; }
+      holdBar.style.width = "0%";
+    }
+
+    function resetChallenge() {
+      clearTimer();
+      ch.phase = "setup";
+      ch.idx = 0;
+      ch.score = 0;
+      ch.hits = 0;
+      ch.items = [];
+      ch.holdStart = 0;
+      ch.lastSeen = null;
+      renderChallenge();
+    }
+
+    function beginRound() {
+      const nameInput = $("playerName");
+      ch.player = (nameInput && nameInput.value.trim()) || "Player";
+
+      if (ch.kind === "scenario") {
+        ch.items = shuffle(SCENARIOS).slice(0, SCENARIO_ROUND_LENGTH);
+        ch.timeLimit = 10;
+      } else {
+        ch.items = [];
+        let previous = -1;
+        for (let i = 0; i < QUICK_ROUND_LENGTH; i++) {
+          let n;
+          do { n = Math.floor(Math.random() * QUICK_TARGETS.length); } while (n === previous);
+          previous = n;
+          ch.items.push(QUICK_TARGETS[n]);
+        }
+        ch.timeLimit = 6;
+      }
+
+      ch.idx = 0;
+      ch.score = 0;
+      ch.hits = 0;
+      showItem();
+    }
+
+    function showItem() {
+      ch.holdStart = 0;
+      ch.lastGood = 0;
+      ch.lastSeen = null;
+
+      if (ch.kind === "scenario") {
+        ch.phase = "reading";
+        renderChallenge();
+      } else {
+        startActing();
+      }
+    }
+
+    function startActing() {
+      ch.phase = "acting";
+      ch.startedAt = performance.now();
+      ch.holdStart = 0;
+      ch.lastGood = 0;
+      ch.lastSeen = null;
+      renderChallenge();
+
+      clearTimer();
+      ch.timerId = setInterval(() => {
+        const left = Math.max(0, ch.timeLimit - (performance.now() - ch.startedAt) / 1000);
+        const fill = $("timerFill");
+        if (fill) fill.style.width = (left / ch.timeLimit * 100) + "%";
+        if (left <= 0) finishItem(false);
+      }, 100);
+    }
+
+    // Receives the AI's current reading (an expression key, or null when there is no usable face)
+    function handleChallengeFrame(key) {
+      if (mode === "free" || ch.phase !== "acting") return;
+
+      const now = performance.now();
+      ch.lastSeen = key;
+
+      const seen = $("aiSees");
+      if (seen) {
+        seen.textContent = key ? "AI currently sees: " + EXPRESSIONS[key].emoji + " " + EXPRESSIONS[key].name
+                               : "AI currently sees: no clear face reading";
+      }
+
+      const item = ch.items[ch.idx];
+      if (!item) return;
+
+      if (key && item.accepted.includes(key)) {
+        if (!ch.holdStart) ch.holdStart = now;
+        ch.lastGood = now;
+        holdBar.style.width = Math.min(100, (now - ch.holdStart) / HOLD_MS * 100) + "%";
+        if (now - ch.holdStart >= HOLD_MS) finishItem(true);
+      } else if (now - ch.lastGood > GRACE_MS) {
+        ch.holdStart = 0;
+        holdBar.style.width = "0%";
+      }
+    }
+
+    function finishItem(success) {
+      if (ch.phase !== "acting") return;
+      clearTimer();
+
+      const left = Math.max(0, ch.timeLimit - (performance.now() - ch.startedAt) / 1000);
+      let points = 0;
+
+      if (success) {
+        points = 10 + Math.round(left);
+        ch.score += points;
+        ch.hits += 1;
+      }
+
+      ch.lastResult = { success, points, seen: ch.lastSeen };
+      ch.reflection = REFLECTIONS[Math.floor(Math.random() * REFLECTIONS.length)];
+      ch.phase = "result";
+      renderChallenge();
+    }
+
+    function nextItem() {
+      ch.idx += 1;
+
+      if (ch.idx >= ch.items.length) {
+        sessionScores.push({
+          player: ch.player,
+          mode: ch.kind === "scenario" ? "Scenario" : "Quick Mirror",
+          hits: ch.hits,
+          total: ch.items.length,
+          score: ch.score
+        });
+        ch.phase = "summary";
+        renderChallenge();
+      } else {
+        showItem();
+      }
+    }
+
+    function scoreboardHTML() {
+      if (!sessionScores.length) return "";
+
+      const rows = sessionScores
+        .slice()
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map((s, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHTML(s.player)}</td><td>${s.mode}</td><td>${s.hits}/${s.total}</td><td>${s.score}</td></tr>`
+        ).join("");
+
+      return `
+        <div class="scoreboard">
+          <div class="result-label">Class scoreboard (this session)</div>
+          <table>
+            <tr><th>#</th><th>NAME</th><th>ACTIVITY</th><th>MATCHED</th><th>POINTS</th></tr>
+            ${rows}
+          </table>
+        </div>`;
+    }
+
+    function renderChallenge() {
+      const isScenario = ch.kind === "scenario";
+      const total = ch.items.length;
+      const item = ch.items[ch.idx];
+      let html = "";
+
+      if (ch.phase === "setup") {
+        const tip = !running ? "Tip: press START CAMERA first."
+                  : cal.status !== "done" ? "Calibrating... relax your face and look at the camera."
+                  : "";
+
+        html = `
+          <div class="result-label">${isScenario ? "Scenario Challenge" : "Quick Mirror"}</div>
+          <p style="color:#a8c6df;font-size:14px;line-height:1.7;margin:0 0 14px">
+            ${isScenario
+              ? `You will get ${SCENARIO_ROUND_LENGTH} short scenarios. For each one, imagine you are in that situation and show the expression you would have. Hold it steady for a moment so the AI can read it.`
+              : `You will get ${QUICK_ROUND_LENGTH} quick targets. Show the expression the AI asks for as fast as you can, then hold it steady.`}
+          </p>
+          <div class="setup-row">
+            <input id="playerName" type="text" maxlength="20" placeholder="Your name (optional)" value="${escapeHTML(ch.player === "Player" ? "" : ch.player)}">
+            <button id="roundStart" class="go-btn">START ROUND</button>
+          </div>
+          <div class="ai-sees">${tip}</div>
+          ${scoreboardHTML()}`;
+      }
+
+      else if (ch.phase === "reading") {
+        html = `
+          <div class="progress-line"><span>SCENARIO ${ch.idx + 1} / ${total}</span><span>SCORE ${ch.score}</span></div>
+          <div class="scenario-card"><small>READ THE SCENARIO</small>${item.text}</div>
+          <p style="color:#a8c6df;font-size:13px;margin:8px 0 14px">
+            Think about how you would feel. When you are ready, press the button and show your face to the camera.
+          </p>
+          <button id="actBtn" class="go-btn">I'M READY: SHOW MY EXPRESSION</button>`;
+      }
+
+      else if (ch.phase === "acting") {
+        html = `
+          <div class="progress-line"><span>${isScenario ? "SCENARIO" : "ROUND"} ${ch.idx + 1} / ${total}</span><span>SCORE ${ch.score}</span></div>
+          ${isScenario
+            ? `<div class="scenario-card"><small>SHOW YOUR EXPRESSION NOW</small>${item.text}</div>`
+            : `<div class="big-target">${item.big}</div><div class="expression">${item.text}</div>`}
+          <div class="timer-track"><div id="timerFill" class="timer-fill"></div></div>
+          <div id="aiSees" class="ai-sees">AI is looking for your face...</div>`;
+      }
+
+      else if (ch.phase === "result") {
+        const r = ch.lastResult;
+        const seenText = r.seen ? EXPRESSIONS[r.seen].emoji + " " + EXPRESSIONS[r.seen].name : "no clear reading";
+
+        html = `
+          <div class="progress-line"><span>${isScenario ? "SCENARIO" : "ROUND"} ${ch.idx + 1} / ${total}</span><span>SCORE ${ch.score}</span></div>
+          <div class="verdict ${r.success ? "win" : "miss"}">
+            ${r.success ? "✔ The AI agrees! +" + r.points + " points" : "✘ The AI did not match it this time"}
+          </div>
+          <div class="ai-sees">
+            ${isScenario ? "Expressions the AI accepted for this scenario: " : "Target was: "}${acceptedText(item.accepted)}
+            ${r.success ? "" : "<br>Last thing the AI saw: " + seenText}
+          </div>
+          ${isScenario ? `<div class="reflect"><b>THINK ABOUT IT:</b> ${ch.reflection}</div>` : ""}
+          <div class="buttons" style="margin-top:16px">
+            <button id="retryBtn" class="stop-btn">TRY AGAIN</button>
+            <button id="nextBtn" class="go-btn">${ch.idx + 1 >= total ? "SEE MY RESULT" : "NEXT"}</button>
+          </div>`;
+      }
+
+      else if (ch.phase === "summary") {
+        html = `
+          <div class="result-label">Round complete</div>
+          <div class="emoji">${ch.hits >= total * 0.7 ? "🏆" : "👏"}</div>
+          <div class="expression">${escapeHTML(ch.player)}: ${ch.hits} / ${total} matched</div>
+          <div class="ai-sees">Total score: ${ch.score} points</div>
+          <div class="reflect">
+            <b>CLASS DISCUSSION:</b> Did the AI ever disagree with you? Did it do better or worse
+            for some people than for others? What does this tell us about using AI to "read" feelings?
+          </div>
+          ${scoreboardHTML()}
+          <div class="buttons" style="margin-top:16px">
+            <button id="sameBtn" class="stop-btn">SAME PLAYER AGAIN</button>
+            <button id="nextPlayerBtn" class="go-btn">NEXT PLAYER (RECALIBRATE)</button>
+          </div>`;
+      }
+
+      challengePanel.innerHTML = html;
+      bindChallengeButtons();
+    }
+
+    function bindChallengeButtons() {
+      const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+
+      const needReady = () => {
+        if (canPlay()) return false;
+        setStatus(running ? "Please wait until calibration finishes." : "Please press START CAMERA first.");
+        return true;
+      };
+
+      on("roundStart", () => { if (!needReady()) beginRound(); });
+      on("actBtn", () => { if (!needReady()) startActing(); });
+
+      on("retryBtn", () => {
+        if (ch.lastResult && ch.lastResult.success) { ch.score -= ch.lastResult.points; ch.hits -= 1; }
+        showItem();
+      });
+
+      on("nextBtn", nextItem);
+      on("sameBtn", () => { ch.phase = "setup"; renderChallenge(); });
+      on("nextPlayerBtn", () => {
+        ch.player = "";
+        if (running) startCalibration();
+        else { ch.phase = "setup"; renderChallenge(); }
+      });
+    }
+
+    /* ==========================================================
+       9. MODE SWITCHING + BUTTONS
+       ========================================================== */
+    function setMode(newMode) {
+      mode = newMode;
+      clearTimer();
+
+      document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.mode === newMode));
+      modeDescription.textContent = MODE_TEXT[newMode];
+      popup.classList.remove("show");
+
+      if (newMode === "free") {
+        freePanel.classList.remove("hidden");
+        challengePanel.classList.add("hidden");
+        if (running && cal.status === "done" && stableKey) onStableExpression(stableKey);
+      } else {
+        freePanel.classList.add("hidden");
+        challengePanel.classList.remove("hidden");
+        ch.kind = newMode;
+        ch.phase = "setup";
+        renderChallenge();
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => setMode(tab.dataset.mode)));
+
+    readingsBtn.addEventListener("click", () => {
+      const hidden = readingsBox.classList.toggle("hidden");
+      readingsBtn.textContent = hidden ? "SHOW AI READINGS" : "HIDE AI READINGS";
+    });
+
+    startBtn.addEventListener("click", startCamera);
+    stopBtn.addEventListener("click", () => stopCamera());
+    recalBtn.addEventListener("click", () => { if (running) startCalibration(); });
+    window.addEventListener("beforeunload", releaseCamera);
+  </script>
+</body>
+</html>

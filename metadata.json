@@ -1,0 +1,6 @@
+{
+  "name": "CAP AI Recognition System - Online Course Platform",
+  "description": "Interactive online course and training platform for AI Recognition Systems, computer vision, neural networks, and biometric intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
