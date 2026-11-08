@@ -10,6 +10,40 @@ interface ChatMessage {
   isError?: boolean;
 }
 
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike extends ArrayLike<SpeechRecognitionAlternativeLike> {
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorEventLike extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+interface SpeechRecognitionWindow extends Window {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+}
+
 // Full Chapter 10 Knowledge Base from the Class IX DTI Textbook provided by the user
 const CHAPTER_CONTENT = `
 CHAPTER 10: AI RECOGNITION SYSTEM (Class IX DTI Textbook)
@@ -108,7 +142,7 @@ export const AITutorScreen: React.FC = () => {
       {
         id: 'init-1',
         role: 'system',
-        content: "👋 Hi! I'm Study Buddy, here to help with Chapter 10: AI Recognition System. Ask me anything from the chapter!",
+        content: "👋 Hi! I'm Study Buddy. Ask about Chapter 10 and I'll use hints and real-life examples to help you reason it out instead of giving the answer straight away.",
       },
     ];
   });
@@ -123,15 +157,35 @@ export const AITutorScreen: React.FC = () => {
     }
   });
   const [isListening, setIsListening] = useState<boolean>(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const [speechStatus, setSpeechStatus] = useState<string>('');
+  const [interimTranscript, setInterimTranscript] = useState<string>('');
+  const chatStreamRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
     try {
       localStorage.setItem('ch10_study_buddy_history', JSON.stringify(messages));
     } catch {}
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const chatStream = chatStreamRef.current;
+    if (chatStream) {
+      chatStream.scrollTo({ top: chatStream.scrollHeight, behavior: 'smooth' });
+    }
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    return () => {
+      const recognition = recognitionRef.current;
+      if (recognition) {
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+        recognition.abort();
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -156,15 +210,16 @@ export const AITutorScreen: React.FC = () => {
 
   // Speech Recognition Setup (Web Speech API)
   const handleToggleMic = () => {
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as SpeechRecognitionWindow;
+    const SpeechRec = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRec) {
-      alert('Speech recognition is not supported in this browser. Please type your query in the box.');
+      setSpeechStatus('Voice input is not supported in this browser. Please type your question instead.');
       return;
     }
 
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
-      setIsListening(false);
+      setSpeechStatus('Voice input stopped.');
       return;
     }
 
@@ -172,32 +227,71 @@ export const AITutorScreen: React.FC = () => {
       const rec = new SpeechRec();
       rec.lang = 'en-IN';
       rec.continuous = false;
-      rec.interimResults = false;
+      rec.interimResults = true;
 
       rec.onstart = () => {
+        setSpeechStatus('Listening… speak your question now.');
+        setInterimTranscript('');
         setIsListening(true);
       };
 
-      rec.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          setInput((prev) => (prev ? prev + ' ' + transcript : transcript));
+      rec.onresult = (event) => {
+        let finalTranscript = '';
+        let partialTranscript = '';
+        for (let index = 0; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const transcript = result[0]?.transcript ?? '';
+          if (result.isFinal) {
+            finalTranscript += transcript;
+          } else {
+            partialTranscript += transcript;
+          }
         }
+
+        if (finalTranscript.trim()) {
+          setInput((previous) => {
+            const existing = previous.trim();
+            return existing ? `${existing} ${finalTranscript.trim()}` : finalTranscript.trim();
+          });
+          setSpeechStatus('Question captured. Review it, then press Send.');
+        }
+        setInterimTranscript(partialTranscript.trim());
       };
 
-      rec.onerror = (event: any) => {
-        console.warn('Speech error:', event.error);
+      rec.onerror = (event) => {
+        const statusByError: Record<string, string> = {
+          'not-allowed': 'Microphone access was blocked. Allow microphone access in your browser settings, then try again.',
+          'service-not-allowed': 'The browser speech service is unavailable. Check your connection or type your question.',
+          'audio-capture': 'No microphone was found. Connect a microphone or type your question.',
+          network: 'Voice recognition needs a network connection. Check your connection or type your question.',
+          'no-speech': 'No speech was detected. Try again and speak after the microphone starts.',
+          'language-not-supported': 'English (India) voice recognition is unavailable in this browser.',
+          aborted: 'Voice input stopped.',
+        };
+        setSpeechStatus(statusByError[event.error] || `Voice input failed (${event.error}). Please try again or type your question.`);
+        setInterimTranscript('');
         setIsListening(false);
+        if (recognitionRef.current === rec) recognitionRef.current = null;
       };
 
       rec.onend = () => {
         setIsListening(false);
+        setInterimTranscript('');
+        if (recognitionRef.current === rec) recognitionRef.current = null;
+        setSpeechStatus((current) =>
+          current === 'Listening… speak your question now.'
+            ? 'No speech was captured. Tap the microphone and try again.'
+            : current
+        );
       };
 
       recognitionRef.current = rec;
+      setSpeechStatus('Starting microphone…');
       rec.start();
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error('Could not start voice input:', error);
+      recognitionRef.current = null;
+      setSpeechStatus('Could not start the microphone. Check its browser permission and try again.');
       setIsListening(false);
     }
   };
@@ -209,114 +303,141 @@ export const AITutorScreen: React.FC = () => {
     sourceLinks?: { label: string; url: string }[];
   } => {
     const q = query.toLowerCase();
+    const socraticReply = (hint: string, example: string, question: string) =>
+      `Let's reason it out together.\n\nHint: ${hint}\n\nReal-life example: ${example}\n\nYour turn: ${question}`;
 
-    // 1. Definition of recognition system
-    if (q.includes('what is a recognition system') || (q.includes('recognition system') && q.includes('definition'))) {
-      return {
-        reply: `A recognition system in AI is a technology that allows computers to identify and interpret human-related inputs such as images, speech, and biometric features.
-
-It works by analysing pixel patterns, shapes, and edges in data using models trained on large sets of labelled examples. Through this learning process, the system becomes capable of accurately recognising new objects, faces, or voices!
-
-Unlike generative AI (which creates new content like pictures or essays), recognition AI focuses solely on identifying and classifying existing data.
-
-Can you think of one device you used today that has a recognition system built-in?`,
-        source: 'Section 10.1: Recognition Systems in Artificial Intelligence',
-      };
-    }
-
-    // 2. Recognition cycle (6 steps)
     if (q.includes('6 step') || q.includes('cycle') || q.includes('steps')) {
       return {
-        reply: `Every AI recognition system follows a 6-step cycle to identify and respond to data:
-
-1. Input (Sensing): Sensors (cameras, mics, scanners) collect raw sensory data.
-2. Pre-processing: Raw data is cleaned, filtered, and lighting/noise is corrected.
-3. Feature Extraction: Key distinguishing characteristics (e.g. eye distance, voice pitch, fingerprint ridges) are extracted.
-4. Pattern Matching / Classification: Extracted features are compared against stored patterns or database templates.
-5. Decision / Output: The system makes a decision (e.g., unlock phone, grant access, reject command).
-6. Feedback and Learning: The system learns from mistakes and updates its models to increase future accuracy.
-
-Which of these 6 steps do you think happens when a camera removes glare or blur from your face?`,
+        reply: socraticReply(
+          'Follow a phone face-unlock attempt from the moment the camera sees you to the moment the phone opens. Think about what must happen to a blurry image before it can be compared.',
+          'A phone adjusts a dim or blurry face image, looks for distinguishing details, compares them with a saved pattern, then decides whether to unlock.',
+          'What do you think should happen first, and which step would improve a noisy image?'
+        ),
         source: 'Recognition System Cycle (6 steps)',
       };
     }
 
-    // 3. Biometric recognition & examples
-    if (q.includes('biometric') || q.includes('fingerprint') || q.includes('iris') || q.includes('face id') || q.includes('facial')) {
+    if (q.includes('limitation') || q.includes('challenge') || q.includes('drawback') || q.includes('disadvantage') || q.includes('ethical') || q.includes('privacy') || q.includes('cost') || q.includes('bias')) {
       return {
-        reply: `Biometric recognition identifies people using unique biological or behavioural characteristics such as fingerprints, iris scans, voice prints, or face geometry!
-
-For example:
-- Smartphone fingerprint sensors (like the Touch ID or under-display sensors).
-- Airport and bank iris scanners for rapid identity verification.
-- Automated school/office attendance systems that verify face geometry.
-
-Because biometric traits cannot easily be forgotten or stolen like a plastic card, they offer high security. 
-
-What do you think is a stored digital pattern called that the system compares your face against? (Hint: check Table 10.1 or Key Words!)`,
-        source: 'Types of Recognition Systems (Table 10.1) & Key Words',
-      };
-    }
-
-    // 4. Limitations & Challenges
-    if (q.includes('limitation') || q.includes('challenge') || q.includes('drawback') || q.includes('disadvantage') || q.includes('ethical') || q.includes('privacy') || q.includes('cost')) {
-      return {
-        reply: `In Chapter 10, several key limitations of AI recognition systems are highlighted:
-
-1. High Cost: Requires expensive hardware, thermal sensors, and high-performance processing servers.
-2. Privacy & Ethical Concerns: Misuse or theft of sensitive biometric data can lead to impersonation.
-3. Job Displacement: Automation may replace human checkpoint and data-entry jobs.
-4. Accuracy & Bias Issues: Poor lighting, noise, or biased training datasets cause misclassification.
-5. Overdependence on Technology: Power outages or system freezes can halt entry doors and critical services.
-6. Limited Understanding: AI detects patterns but cannot understand human context or emotional nuance beyond its training.
-
-Why do you think biased training data is particularly dangerous in security and facial recognition?`,
+        reply: socraticReply(
+          'Think about what could go wrong when a recognition system sees poor-quality data, learns from unbalanced examples, or stores sensitive personal information.',
+          'Imagine a school attendance camera in a dark classroom: it may fail to recognize some students, while the stored face data still needs careful protection.',
+          'Which concern would affect a student most in this example, and what safeguard could help?'
+        ),
         source: 'Limitations of AI Recognition System',
       };
     }
 
-    // 5. Bhutan's AICS system
     if (q.includes('bhutan') || q.includes('aics') || q.includes('phuntsholing') || q.includes('immigration')) {
       return {
-        reply: `That's an exciting real-world example from our textbook!
-
-Bhutan's Automated Immigration Clearance System (AICS) at the Phuntsholing gate relies on facial recognition and biometric technology to speed up border crossing.
-
-It was officially launched on His Majesty The King's birthday in 2025 by the Department of Immigration (Kuensel, 2025). It allows citizens and visitors to clear immigration gates rapidly without manual paper stamps!`,
+        reply: socraticReply(
+          'Think about how an automated border gate can check that a traveller matches an identity record without relying only on a paper document.',
+          'At an airport, a gate may scan a traveller’s face and compare identifying details with a saved record before allowing them through.',
+          'What kind of personal feature might help the system check identity, and why should that data be protected?'
+        ),
         source: 'ICT in Context (Interesting Facts)',
       };
     }
 
-    // 6. Automated Data Capture (ADC)
     if (q.includes('adc') || q.includes('automated data capture') || q.includes('data capture')) {
       return {
-        reply: `Automated Data Capture (ADC) refers to technologies or systems that collect data automatically without manual typing or human keyboard input!
-
-AI systems use ADC to gather real-time data quickly. Everyday examples:
-- Banking: ADC scans checks -> AI verifies signatures and fraud patterns.
-- Healthcare: ADC digitises patient forms -> AI extracts medical terms.
-- Retail: ADC scans barcodes/RFID -> AI predicts buying trends.
-- Education: ADC captures student quiz sheets -> AI grades them automatically!
-
-How does ADC save time compared to manual typing?`,
+        reply: socraticReply(
+          'Look for the difference between information a person types manually and information a device collects from a real-world input.',
+          'A school scanner can collect attendance from a fingerprint, instead of asking a teacher to type every student’s name.',
+          'Which part of that example is being collected automatically, and how could it save time?'
+        ),
         source: 'Tips: Automated Data Capture (ADC)',
       };
     }
 
-    // 7. Benefits
     if (q.includes('benefit') || q.includes('advantage') || q.includes('why use')) {
       return {
-        reply: `The primary benefits of AI recognition systems in Chapter 10 include:
-- Rapid processing of massive datasets with reduced human fatigue and errors.
-- Enhanced security at airports, schools, and banks.
-- Consistent 24/7 performance without getting tired.
-- High convenience (instant touchless face unlock and voice commands).
-- Personalized services tailored to user preferences.`,
+        reply: socraticReply(
+          'Compare a fast automatic check with a person entering the same information by hand. Consider speed, repeated effort, and consistency.',
+          'A phone that recognizes its owner can unlock with a glance instead of requiring a password each time.',
+          'What becomes easier for the user, and what should the phone still do to protect the owner?'
+        ),
         source: 'Benefits of AI Recognition System',
       };
     }
 
-    // Keep unfamiliar Chapter 10 questions grounded in the textbook rather than guessing.
+    if (q.includes('biometric') || q.includes('fingerprint') || q.includes('iris') || q.includes('face id') || q.includes('facial')) {
+      return {
+        reply: socraticReply(
+          'Ask what makes a body feature different from a password that can be changed or a card that can be replaced.',
+          'A school attendance scanner reads a fingerprint and compares its ridge pattern with an enrolled record.',
+          'Which physical detail is the scanner using, and what is the name for a stored pattern used in a comparison?'
+        ),
+        source: 'Types of Recognition Systems (Table 10.1) & Key Words',
+      };
+    }
+
+    if (q.includes('speech') || q.includes('voice') || q.includes('siri') || q.includes('alexa')) {
+      return {
+        reply: socraticReply(
+          'Think about what happens between speaking a command and a device carrying it out. The system needs to work with sound before it can choose an action.',
+          'When you ask a smart speaker to set a timer, it listens to your words and then starts the timer.',
+          'What does the device need to identify in the audio before it can follow your command?'
+        ),
+        source: 'Types of Recognition Systems (Table 10.1)',
+      };
+    }
+
+    if (q.includes('gesture') || q.includes('hand movement') || q.includes('sign language')) {
+      return {
+        reply: socraticReply(
+          'Consider how a camera can follow the position and movement of a hand, rather than reading a printed page or listening to speech.',
+          'A touch-free game might detect a raised hand and use that movement to control something on screen.',
+          'What information about the hand’s movement would help the system decide which action you intended?'
+        ),
+        source: 'Types of Recognition Systems (Table 10.1)',
+      };
+    }
+
+    if (q.includes('image') || q.includes('photo') || q.includes('picture') || q.includes('object')) {
+      return {
+        reply: socraticReply(
+          'Focus on the visual patterns in a camera image: shapes, edges, and details that distinguish one object from another.',
+          'A photo app can find a dog in a picture by comparing visual details with patterns it has learned.',
+          'What visual clues might help it tell a dog from a cat?'
+        ),
+        source: 'Types of Recognition Systems (Table 10.1)',
+      };
+    }
+
+    if (q.includes('emotion') || q.includes('feeling')) {
+      return {
+        reply: socraticReply(
+          'Think about visible cues such as the position of eyebrows and mouth, and remember that a visible expression does not always reveal someone’s full feelings.',
+          'A learning activity might notice a smile or a frown, but it should not assume it knows exactly how a student feels.',
+          'What could make an expression-recognition system misread a person, and why should its result be treated carefully?'
+        ),
+        source: 'Types of Recognition Systems (Table 10.1) & Limitations',
+      };
+    }
+
+    if (q.includes('text') || q.includes('ocr') || q.includes('handwriting') || q.includes('document')) {
+      return {
+        reply: socraticReply(
+          'Imagine turning letters in a photo into text you can edit. The system must first locate and distinguish the characters.',
+          'A phone scanning a printed page can make its words searchable instead of leaving them as pixels in an image.',
+          'What does the system need to identify on the page before it can produce editable text?'
+        ),
+        source: 'Types of Recognition Systems (Table 10.1)',
+      };
+    }
+
+    if (q.includes('what is a recognition system') || (q.includes('recognition system') && q.includes('definition'))) {
+      return {
+        reply: socraticReply(
+          'Ask whether the computer is creating new material or identifying something already present in an input.',
+          'A phone camera checks a face that is already in front of it and uses that information to decide whether to unlock.',
+          'What does the system receive, and what is it trying to identify?'
+        ),
+        source: 'Section 10.1: Recognition Systems in Artificial Intelligence',
+      };
+    }
+
     if (!/\b(recognition|biometric|fingerprint|iris|facial|speech|gesture|image|text recognition|ocr|emotion|automated data capture|adc|sensor|cctv|smart home|aics|privacy|bias|limitation|benefit|classification|feature extraction|pattern matching|pre-processing|template)\b/.test(q)) {
       const encodedQuery = encodeURIComponent(query.trim());
       const sourceLinks = [
@@ -343,19 +464,18 @@ How does ADC save time compared to manual typing?`,
       }
 
       return {
-        reply: `That question looks like it is outside Chapter 10, so I can't verify the answer from our textbook. These learning resources can help you research it. Check the information against a trusted source and ask your teacher if you need help.`,
+        reply: `That topic is outside Chapter 10, so let's investigate it rather than guess. Start by identifying the key idea in your question, then compare what two trusted sources say.\n\nReal-life connection: think of a time you encountered this topic in a class, at home, or online. What did you already notice about it?\n\nYour turn: after checking a resource below, what is one clue you found and what question do you still have?`,
         source: 'External learning resources',
         sourceLinks,
       };
     }
 
-    // 8. General textbook fallback
     return {
-      reply: `That's a great question about "${query}". 
-
-In Chapter 10, recognition systems capture real-world inputs (light, soundwaves, biometrics) through sensors, pre-process the data to remove noise, extract key mathematical features, and match them against stored database templates to make decisions.
-
-Would you like to look at the 6-step recognition cycle, real-world examples like CCTV & Smart Homes, or the ethical limitations next?`,
+      reply: socraticReply(
+        'Break the question into three parts: what the system senses, what pattern it looks for, and what action follows.',
+        'A motion-aware CCTV camera senses a scene, looks for movement, and can begin recording when something passes.',
+        'Which part of your question is about the input, and what evidence would help you work out the system’s decision?'
+      ),
       source: 'Section 10.1 & Chapter 10 Overview',
     };
   };
@@ -363,6 +483,18 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
   const handleSend = (textToSend?: string) => {
     const text = textToSend || input;
     if (!text.trim()) return;
+
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      recognition.abort();
+    }
+    recognitionRef.current = null;
+    setIsListening(false);
+    setInterimTranscript('');
+    setSpeechStatus('');
 
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -403,15 +535,19 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
         {
           id: 'init-1',
           role: 'system',
-          content: "👋 Hi! I'm Study Buddy, here to help with Chapter 10: AI Recognition System. Ask me anything from the chapter!",
+          content: "👋 Hi! I'm Study Buddy. Ask about Chapter 10 and I'll use hints and real-life examples to help you reason it out instead of giving the answer straight away.",
         },
       ];
       setMessages(initial);
+      setSpeechStatus('');
+      setInterimTranscript('');
       try {
         localStorage.removeItem('ch10_study_buddy_history');
       } catch {}
     }
   };
+
+  const speechError = /not supported|blocked|unavailable|no microphone|network|no speech|failed|could not/i.test(speechStatus);
 
   return (
     <div className="min-h-screen bg-[#070b16] py-8 px-4 sm:px-8 text-slate-100 flex justify-center">
@@ -472,7 +608,7 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
         </header>
 
         {/* ----------------- CHAT STREAM ----------------- */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div ref={chatStreamRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {messages.map((m) => {
             if (m.role === 'system') {
               return (
@@ -538,7 +674,6 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
             </div>
           )}
 
-          <div ref={chatEndRef} />
         </div>
 
         {/* ----------------- QUICK SUGGESTIONS CHIPS ----------------- */}
@@ -565,7 +700,11 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
           <input
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setSpeechStatus('');
+              setInterimTranscript('');
+            }}
             placeholder={isListening ? 'Listening… speak your Chapter 10 question now' : 'Ask something about Chapter 10...'}
             className="flex-1 px-4 py-3 rounded-2xl bg-[#060b17] border border-[#1f3152] text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#06b6d4] transition-colors"
           />
@@ -580,6 +719,8 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
                 : 'bg-[#101a2f] border-[#223556] text-cyan-400 hover:border-cyan-400 hover:text-white'
             }`}
             title={isListening ? 'Stop listening' : 'Speak your question'}
+            aria-label={isListening ? 'Stop voice input' : 'Speak your question'}
+            aria-pressed={isListening}
           >
             <Mic className="w-5 h-5" />
           </button>
@@ -594,6 +735,14 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
             <Send className="w-4 h-4" />
           </button>
         </form>
+        {(speechStatus || interimTranscript) && (
+          <div
+            aria-live="polite"
+            className={`px-4 pb-3 text-xs ${speechError ? 'text-rose-300' : 'text-cyan-300'}`}
+          >
+            {interimTranscript ? `Hearing: ${interimTranscript}` : speechStatus}
+          </div>
+        )}
       </div>
     </div>
   );
