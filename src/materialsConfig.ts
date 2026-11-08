@@ -148,7 +148,7 @@ export const COURSE_MATERIALS = {
       slotId: 'SLOT_AUDIO_ACTIVITIES',
       title: 'Voice Instruction',
       speaker: 'Class IX DTI Instructor',
-      audioUrl: assetUrl('assets/aistudio/Voice_instruction_32219017.m4a'),
+      audioUrl: assetUrl('assets/aistudio/Voice_instruction_32219017.wav'),
       duration: '01:16',
       transcript: `Welcome, Class IX students, to the interactive AI Recognition System lab activities! Today, you will experience artificial intelligence and computer vision in real time through two hands-on activities.
 

@@ -2,11 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>🌈 Types of AI Recognition System Quiz 🎵</title>
+    <title>Hand Gesture Recognition Quiz | AI Recognition System</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;700&display=swap" rel="stylesheet">
-    
+
     <style>
         :root { --pink: #ff85a2; --blue: #70d6ff; --purple: #be95ff; --yellow: #ffd670; --dark: #2d2d2d; }
         body { font-family: 'Fredoka', sans-serif; background: #fff5e6; margin: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
@@ -24,7 +23,7 @@
     height: 48px;
     font-size: 42px;
     pointer-events: none;
-    z-index: 50000;
+    z-index: 20000;
     display: none;
     text-shadow: 0 0 10px white;
     transform: translate(-50%, -50%);
@@ -212,6 +211,10 @@ button, .btn, #nextBtn, #restartBtn, #startBtn {
 #cursor.hovering {
     filter: drop-shadow(0 0 8px var(--yellow));
 }
+#feedback-overlay .cute-btn.hovering {
+    transform: scale(1.05);
+    box-shadow: 8px 8px 0 var(--dark);
+}
 #cursor.hovering::after {
     content: "";
     position: absolute;
@@ -228,6 +231,357 @@ button, .btn, #nextBtn, #restartBtn, #startBtn {
 @keyframes cursorSpin {
     to { transform: translate(-50%, -50%) rotate(360deg); }
 }
+
+:root {
+    --pink: #ff6b8a;
+    --blue: #00f5c4;
+    --purple: #22d3ee;
+    --yellow: #00e0b3;
+    --dark: #070b16;
+    color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    display: block;
+    min-height: 100vh;
+    overflow: auto;
+    background:
+        radial-gradient(ellipse at 12% 0%, rgba(0, 245, 196, .08), transparent 38%),
+        #070b16;
+    color: #f8fafc;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.app-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    width: min(1440px, 100%);
+    margin: 0 auto;
+    padding: 22px 28px 14px;
+}
+
+.header-copy { min-width: 0; }
+
+.eyebrow {
+    color: #00f5c4;
+    font: 700 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+}
+
+.app-header h1 {
+    margin: 5px 0 0;
+    color: #f8fafc;
+    font-size: clamp(20px, 3vw, 30px);
+    font-weight: 800;
+    letter-spacing: -.035em;
+}
+
+.exit-btn {
+    position: fixed;
+    top: 16px;
+    right: 24px;
+    z-index: 100001;
+    flex-shrink: 0;
+    padding: 10px 14px;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    background: #0c1426;
+    color: #cbd5e1;
+    font: 700 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .05em;
+    cursor: pointer;
+    transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+
+.exit-btn:hover {
+    border-color: rgba(0, 245, 196, .6);
+    background: rgba(0, 245, 196, .08);
+    color: #00f5c4;
+}
+
+#game-layout {
+    width: min(1440px, 100%);
+    height: min(760px, calc(100dvh - 100px));
+    min-height: 520px;
+    gap: 18px;
+    margin: 0 auto;
+    padding: 10px 28px 24px;
+}
+
+#left-panel {
+    min-width: 0;
+    border: 1px solid #263653;
+    border-radius: 24px;
+    background: #050914;
+    filter: none;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+}
+
+#webcam { display: block; }
+
+.camera-badge,
+.camera-help {
+    position: absolute;
+    z-index: 2;
+    left: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(148, 163, 184, .22);
+    border-radius: 999px;
+    background: rgba(7, 11, 22, .78);
+    color: #e2e8f0;
+    font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .07em;
+    padding: 8px 12px;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+}
+
+.camera-badge { top: 16px; }
+.camera-help { bottom: 16px; color: #cbd5e1; letter-spacing: 0; }
+.camera-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #64748b;
+}
+.camera-badge.ready .camera-dot {
+    background: #00f5c4;
+    box-shadow: 0 0 12px rgba(0, 245, 196, .8);
+}
+
+#right-panel { min-width: 0; gap: 14px; }
+
+.score-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 58px;
+    padding: 10px 16px;
+    border: 1px solid #1d2d4c;
+    border-radius: 16px;
+    background: #0c1426;
+    color: #94a3b8;
+    font: 700 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+}
+
+.score-bar span { color: #f8fafc; }
+#score-val { color: #00f5c4 !important; }
+
+.card {
+    min-height: 0;
+    padding: clamp(20px, 3vw, 32px);
+    border: 1px solid #1d2d4c;
+    border-radius: 22px;
+    background: linear-gradient(145deg, #0c1426, #0a1120);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .28);
+}
+
+.q-title {
+    margin-bottom: 22px;
+    color: #f8fafc;
+    font-size: clamp(18px, 2vw, 24px);
+    line-height: 1.45;
+}
+
+.options-grid { gap: 12px; }
+
+#options-box .opt-btn {
+    min-height: 56px;
+    padding: 14px 18px;
+    border: 1px solid #263653;
+    border-radius: 14px;
+    background: #111c34;
+    box-shadow: none;
+    color: #e2e8f0;
+    font: 600 15px/1.45 Inter, ui-sans-serif, system-ui, sans-serif;
+    text-align: left;
+    transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+
+#options-box .opt-btn:hover,
+#options-box .opt-btn.hovering {
+    transform: translateY(-1px);
+    border-color: rgba(0, 245, 196, .72);
+    background: rgba(0, 245, 196, .1);
+    color: #f8fafc;
+}
+
+#cursor {
+    filter: drop-shadow(0 0 12px rgba(0, 245, 196, .65));
+}
+
+#cursor.hovering::after {
+    border-top-color: #00f5c4;
+}
+
+#start-screen,
+#feedback-overlay {
+    padding: 24px;
+    background: rgba(5, 9, 20, .84);
+    backdrop-filter: blur(12px);
+}
+
+#start-screen {
+    background:
+        radial-gradient(ellipse at 50% 35%, rgba(0, 245, 196, .1), transparent 52%),
+        rgba(5, 9, 20, .94);
+}
+
+.start-card,
+.feedback-card {
+    width: min(600px, 100%);
+    padding: clamp(24px, 5vw, 44px);
+    border: 1px solid #263653;
+    border-radius: 26px;
+    background: linear-gradient(145deg, #0c1426, #080e1c);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .5), 0 0 40px rgba(0, 245, 196, .06);
+    text-align: center;
+}
+
+.start-icon {
+    display: grid;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 18px;
+    place-items: center;
+    border: 1px solid rgba(0, 245, 196, .3);
+    border-radius: 20px;
+    background: rgba(0, 245, 196, .08);
+    font-size: 32px;
+}
+
+.start-card h2 {
+    margin: 10px 0;
+    color: #f8fafc;
+    font-size: clamp(24px, 5vw, 36px);
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.start-card p,
+.feedback-card p {
+    margin: 10px auto 22px;
+    max-width: 460px;
+    color: #94a3b8;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.start-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 22px 0;
+}
+
+.start-step {
+    padding: 10px 8px;
+    border: 1px solid #1d2d4c;
+    border-radius: 12px;
+    background: #0a1120;
+    color: #cbd5e1;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.cute-btn {
+    padding: 14px 24px;
+    border: 1px solid #00f5c4;
+    border-radius: 13px;
+    background: #00f5c4;
+    box-shadow: 0 0 24px rgba(0, 245, 196, .18);
+    color: #070b16;
+    font: 800 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .06em;
+    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.cute-btn:hover {
+    transform: translateY(-1px);
+    background: #00e0b3;
+    box-shadow: 0 0 30px rgba(0, 245, 196, .3);
+}
+
+.feedback-card { width: min(560px, 100%); }
+.feedback-card h2 {
+    margin: 0;
+    font-size: clamp(28px, 6vw, 44px);
+    font-weight: 800;
+}
+#fb-desc { max-width: 460px; }
+
+#final-screen {
+    overflow: auto;
+    background:
+        radial-gradient(ellipse at 50% 25%, rgba(0, 245, 196, .1), transparent 55%),
+        rgba(5, 9, 20, .97);
+}
+
+.final-card {
+    width: min(620px, 100%);
+    padding: clamp(24px, 5vw, 40px);
+    border: 1px solid #263653;
+    border-radius: 26px;
+    background: linear-gradient(145deg, #0c1426, #080e1c);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .5);
+}
+
+.final-trophy { font-size: 64px; }
+.final-card h1 { color: #f8fafc; font-size: clamp(30px, 6vw, 42px); }
+.score-label, .result-details { color: #cbd5e1; }
+.score-circle {
+    width: 140px;
+    height: 140px;
+    border: 1px solid rgba(0, 245, 196, .5);
+    background: rgba(0, 245, 196, .1);
+    box-shadow: 0 0 30px rgba(0, 245, 196, .08);
+    color: #00f5c4;
+}
+#final-score { color: #f8fafc; }
+#final-percentage { color: #00f5c4; }
+#final-message { color: #cbd5e1; font-size: 16px; line-height: 1.6; }
+.result-details { font-size: 14px; }
+
+@media (max-width: 800px) {
+    .app-header { padding: 18px 18px 10px; }
+    #game-layout {
+        height: auto;
+        min-height: 0;
+        flex-direction: column;
+        gap: 14px;
+        padding: 8px 18px 20px;
+    }
+    #left-panel { flex: none; width: 100%; aspect-ratio: 16 / 9; }
+    #right-panel { flex: none; width: 100%; }
+    .card { min-height: 350px; }
+}
+
+@media (max-width: 480px) {
+    .app-header { align-items: center; padding-inline: 14px; }
+    .exit-btn { top: 10px; right: 12px; padding: 9px 10px; font-size: 10px; }
+    #game-layout { padding-inline: 14px; }
+    .start-steps { grid-template-columns: 1fr; }
+    .score-bar { padding-inline: 12px; font-size: 10px; }
+    .camera-badge, .camera-help { left: 10px; font-size: 9px; }
+    .result-details { flex-direction: column; gap: 8px; }
+}
+
+@media (max-height: 650px) and (min-width: 801px) {
+    #game-layout { min-height: 460px; height: calc(100dvh - 90px); }
+    .card { padding: 20px; }
+    .q-title { margin-bottom: 14px; }
+    .options-grid { gap: 8px; }
+    #options-box .opt-btn { min-height: 48px; padding-block: 10px; }
+}
 </style>
 </head>
 <body>
@@ -236,16 +590,26 @@ button, .btn, #nextBtn, #restartBtn, #startBtn {
     <audio id="sound-correct" src="https://www.soundjay.com/buttons/button-09.mp3"></audio>
     <audio id="sound-wrong" src="https://www.soundjay.com/buttons/button-10.mp3"></audio>
     
-    <h1 style="color: var(--dark); margin: 5px;">✨ TYPES OF AI RECOGNITION SYSTEMS QUIZ ✨</h1>
+    <header class="app-header">
+        <div class="header-copy">
+            <div class="eyebrow">Interactive AI activity • Gesture control</div>
+            <h1>Hand Gesture Recognition Quiz</h1>
+        </div>
+        <button class="exit-btn" type="button" onclick="exitActivity()" aria-label="Exit activity and return to the course">
+            ← Exit Activity
+        </button>
+    </header>
 
     <div id="game-layout">
         <div id="left-panel">
             <video id="webcam"></video>
-            <div id="cursor">🪄</div>
+            <div class="camera-badge"><span class="camera-dot"></span> CAMERA PREVIEW</div>
+            <div class="camera-help">Show one hand to control the magic wand</div>
         </div>
         <div id="right-panel">
-            <div style="font-size: 24px; font-weight: bold; background: white; padding: 10px; border-radius: 20px; border: 3px solid var(--dark); text-align: center;">
-                SCORE: <span id="score-val">0</span> | Q: <span id="q-num">1</span>/<span id="q-total"></span>
+            <div class="score-bar">
+                <div>SCORE <span id="score-val">0</span></div>
+                <div>QUESTION <span id="q-num">1</span> / <span id="q-total"></span></div>
             </div>
             <div class="card">
                 <div id="q-text" class="q-title">Loading Question...</div>
@@ -254,15 +618,29 @@ button, .btn, #nextBtn, #restartBtn, #startBtn {
         </div>
     </div>
 
+    <div id="cursor" aria-hidden="true">🪄</div>
+
     <div id="start-screen">
-        <h1 style="font-size: 50px; color: white; text-align: center;">POINT YOUR FINGER<br>TO SELECT ANSWERS!</h1>
-        <button class="cute-btn" onclick="startApp()">START MAGIC 🚀</button>
+        <div class="start-card">
+            <div class="start-icon" aria-hidden="true">🪄</div>
+            <div class="eyebrow">Gesture-controlled quiz</div>
+            <h2>Point your finger<br>to select answers</h2>
+            <p>Allow camera access, then hover your index finger over an answer. Hold still briefly to select it, or use a mouse or touch.</p>
+            <div class="start-steps" aria-label="How to play">
+                <div class="start-step">01 &nbsp; Allow camera</div>
+                <div class="start-step">02 &nbsp; Hover over an answer</div>
+                <div class="start-step">03 &nbsp; Hold to select</div>
+            </div>
+            <button class="cute-btn" onclick="startApp()">START ACTIVITY</button>
+        </div>
     </div>
 
     <div id="feedback-overlay">
-        <h1 id="fb-title" style="font-size: 70px;"></h1>
-        <p id="fb-desc" style="font-size: 26px; margin-bottom: 30px; text-align: center; max-width: 80%;"></p>
-        <button class="cute-btn" onclick="nextQuestion()">NEXT QUESTION ⮕</button>
+        <div class="feedback-card">
+            <h2 id="fb-title"></h2>
+            <p id="fb-desc"></p>
+            <button class="cute-btn" onclick="nextQuestion()">NEXT QUESTION &nbsp;→</button>
+        </div>
     </div>
 
 <script>
@@ -271,6 +649,15 @@ const cursor = document.getElementById('cursor');
 const bgMusic = document.getElementById('bg-music');
 const sfxCorrect = document.getElementById('sound-correct');
 const sfxWrong = document.getElementById('sound-wrong');
+
+function exitActivity() {
+    if (window.parent !== window) {
+        window.parent.postMessage({ type: 'cap-ai:exit-activity' }, window.location.origin);
+        return;
+    }
+
+    window.location.assign(new URL('../../', window.location.href));
+}
 
 let qIdx = 0;
 let score = 0;
@@ -363,11 +750,15 @@ function onResults(res) {
 }
 
 function checkHover(x, y) {
-    if (!active) return;
-
     const target = document.elementFromPoint(x, y);
-    const button = target ? target.closest('.opt-btn') : null;
-    const buttons = document.querySelectorAll('.opt-btn');
+    const feedbackOverlay = document.getElementById('feedback-overlay');
+    const isFeedbackVisible = feedbackOverlay.style.display !== 'none';
+    const button = active
+        ? target?.closest('.opt-btn')
+        : isFeedbackVisible
+            ? target?.closest('#feedback-overlay .cute-btn')
+            : null;
+    const buttons = document.querySelectorAll('.opt-btn, #feedback-overlay .cute-btn');
 
     buttons.forEach(b => b.classList.remove('hovering'));
     cursor.classList.remove('hovering');
@@ -380,7 +771,11 @@ function checkHover(x, y) {
             currentHover = button;
             hoverTime = Date.now();
         } else if (Date.now() - hoverTime >= 1200) {
-            selectAnswer(Number(button.dataset.idx));
+            if (button.matches('.opt-btn')) {
+                selectAnswer(Number(button.dataset.idx));
+            } else {
+                nextQuestion();
+            }
         }
     } else {
         currentHover = null;
@@ -433,14 +828,14 @@ function selectAnswer(i) {
         sfxCorrect.currentTime = 0;
         sfxCorrect.play().catch(() => {});
         document.getElementById('fb-title').innerText = "CORRECT! 🌟";
-        document.getElementById('fb-title').style.color = "#4CAF50";
+        document.getElementById('fb-title').style.color = "#00f5c4";
         document.getElementById('fb-desc').innerText =
             "Great job! You selected the correct answer.";
     } else {
         sfxWrong.currentTime = 0;
         sfxWrong.play().catch(() => {});
         document.getElementById('fb-title').innerText = "WRONG! ❌";
-        document.getElementById('fb-title').style.color = "#F44336";
+        document.getElementById('fb-title').style.color = "#ff6b6b";
         document.getElementById('fb-desc').innerText =
             "Good try! The correct answer was: " +
             questions[qIdx].a[questions[qIdx].c];

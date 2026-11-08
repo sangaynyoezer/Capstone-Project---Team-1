@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Play, Pause, Volume2, VolumeX, CheckCircle2, X, 
+  Play, Pause, Volume2, CheckCircle2, X,
   Camera, FileText, Check, RotateCcw,
   Sparkles, Maximize2, ExternalLink, HelpCircle, Hand, Smile, BookOpen
 } from 'lucide-react';
 import { COURSE_MATERIALS } from '../../materialsConfig';
-import { ambientMusic } from '../../utils/ambientAudio';
 import { assetUrl } from '../../utils/assetUrl';
 
 interface ActivitiesScreenProps {
@@ -72,118 +71,50 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
   const [activeActivity, setActiveActivity] = useState<EmbeddedActivityItem | null>(null);
   const [iframeKey, setIframeKey] = useState<number>(0);
 
-  // Audio state for recorded voice instruction
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
-  const [audioSource, setAudioSource] = useState<string>(audioData.audioUrl || assetUrl('assets/aistudio/Voice_instruction_32219017.m4a'));
   const [showTranscript, setShowTranscript] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const activityFrameRef = useRef<HTMLIFrameElement>(null);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Handle Audio Play/Pause with soft ambient background music
-  const togglePlayAudio = () => {
-    if (audioSource) {
-      if (!audioRef.current) return;
-      if (isPlayingAudio) {
-        audioRef.current.pause();
-        setIsPlayingAudio(false);
-        ambientMusic.stop();
-      } else {
-        audioRef.current.play().then(() => {
-          setIsPlayingAudio(true);
-          ambientMusic.start(0.08);
-        }).catch((err) => {
-          console.warn('Audio play error:', err);
-        });
+  useEffect(() => {
+    const handleActivityMessage = (event: MessageEvent<unknown>) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== activityFrameRef.current?.contentWindow ||
+        typeof event.data !== 'object' ||
+        event.data === null ||
+        !('type' in event.data) ||
+        event.data.type !== 'cap-ai:exit-activity'
+      ) {
+        return;
       }
+
+      setActiveActivity(null);
+    };
+
+    window.addEventListener('message', handleActivityMessage);
+    return () => window.removeEventListener('message', handleActivityMessage);
+  }, []);
+
+  const togglePlayAudio = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (!audio.paused) {
+      audio.pause();
       return;
     }
 
-    // Fallback: Web Speech Synthesis for immediate voice instructions
-    if ('speechSynthesis' in window) {
-      if (isPlayingAudio || isSynthesizing) {
-        window.speechSynthesis.cancel();
-        setIsPlayingAudio(false);
-        setIsSynthesizing(false);
-        ambientMusic.stop();
-      } else {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(audioData.transcript);
-        utterance.rate = 0.95;
-        utterance.pitch = 1.0;
-        
-        utterance.onstart = () => {
-          setIsPlayingAudio(true);
-          setIsSynthesizing(true);
-          ambientMusic.start(0.08);
-        };
-        utterance.onend = () => {
-          setIsPlayingAudio(false);
-          setIsSynthesizing(false);
-          ambientMusic.stop();
-        };
-        utterance.onerror = () => {
-          setIsPlayingAudio(false);
-          setIsSynthesizing(false);
-          ambientMusic.stop();
-        };
-        
-        window.speechSynthesis.speak(utterance);
-      }
-    } else {
-      setIsPlayingAudio(!isPlayingAudio);
+    try {
+      await audio.play();
+    } catch (error) {
+      setIsPlayingAudio(false);
+      console.warn('Voice instruction playback failed:', error);
     }
-  };
-
-  useEffect(() => {
-    return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      ambientMusic.stop();
-    };
-  }, []);
-
-
-
-  const formatTime = (seconds: number) => {
-    if (isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
     <div className="min-h-screen bg-[#070b16] py-12 px-6 sm:px-12 text-white">
-      {/* Hidden Native Audio Element */}
-      {audioSource && (
-        <audio
-          ref={audioRef}
-          src={audioSource}
-          muted={isMuted}
-          onTimeUpdate={() => {
-            if (audioRef.current) {
-              setCurrentTime(audioRef.current.currentTime);
-            }
-          }}
-          onLoadedMetadata={() => {
-            if (audioRef.current) {
-              setDuration(audioRef.current.duration);
-            }
-          }}
-          onEnded={() => {
-            setIsPlayingAudio(false);
-            setCurrentTime(0);
-            ambientMusic.stop();
-          }}
-        />
-      )}
-
-
-
       <div className="max-w-7xl mx-auto space-y-12">
         {/* Top Header */}
         <div className="space-y-3">
@@ -200,6 +131,90 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
           <p className="text-slate-300 text-sm sm:text-base max-w-2xl leading-relaxed">
             Test cutting-edge computer vision directly in your browser. Use your webcam to experience facial emotion detection or point your finger in the air to answer quiz questions with hand gesture tracking!
           </p>
+        </div>
+
+        {/* ----------------- VOICE INSTRUCTION AUDIO PLAYER CARD ----------------- */}
+        <div className="p-6 sm:p-8 rounded-3xl bg-[#0c1426] border border-[#1d2d4c] shadow-2xl space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <audio
+              ref={audioRef}
+              src={audioData.audioUrl}
+              preload="auto"
+              onPlay={() => setIsPlayingAudio(true)}
+              onPause={() => setIsPlayingAudio(false)}
+              onEnded={() => setIsPlayingAudio(false)}
+              onError={(event) => {
+                setIsPlayingAudio(false);
+                console.warn('Voice instruction audio failed to load or decode:', event.currentTarget.error);
+              }}
+            />
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-[#00f5c4] flex-shrink-0">
+                <Volume2 className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base sm:text-lg font-bold text-white">
+                    {audioData.title}
+                  </h3>
+                  <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
+                    Voice Guide Available
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                  Listen to voice instructions for completing hands-on recognition tasks.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={togglePlayAudio}
+                className="px-6 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_20px_rgba(0,245,196,0.25)] flex items-center justify-center gap-2 whitespace-nowrap transition-transform active:scale-95 cursor-pointer"
+              >
+                {isPlayingAudio ? (
+                  <>
+                    <Pause className="w-4 h-4 fill-current" />
+                    <span>Pause Voice Instruction</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Play Voice Instruction</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowTranscript(!showTranscript)}
+                className={`px-4 py-3.5 rounded-xl font-bold text-xs sm:text-sm border transition-colors cursor-pointer flex items-center gap-2 ${
+                  showTranscript
+                    ? 'bg-purple-950/40 border-purple-500/50 text-purple-300'
+                    : 'bg-[#111c34] hover:bg-[#182849] border-slate-700 text-slate-300'
+                }`}
+                title="View activity instructions"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Instruction</span>
+              </button>
+            </div>
+          </div>
+
+          {showTranscript && (
+            <div className="p-4 rounded-2xl bg-[#080d19] border border-purple-500/30 space-y-2 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between text-xs font-mono text-purple-300">
+                <span className="font-bold flex items-center gap-1.5 uppercase tracking-wider">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  INSTRUCTION
+                </span>
+                <span className="text-slate-500">Class IX DTI Voice Guide</span>
+              </div>
+              <div className="text-xs sm:text-sm text-slate-300 leading-relaxed bg-purple-950/20 p-4 rounded-xl border border-purple-900/40 whitespace-pre-line space-y-2">
+                {audioData.transcript}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ----------------- TWO FEATURED EMBEDDED ACTIVITIES ----------------- */}
@@ -316,134 +331,6 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
           })}
         </div>
 
-        {/* ----------------- VOICE INSTRUCTION AUDIO PLAYER CARD ----------------- */}
-        <div className="p-6 sm:p-8 rounded-3xl bg-[#0c1426] border border-[#1d2d4c] shadow-2xl space-y-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-[#00f5c4] flex-shrink-0">
-                <Volume2 className="w-6 h-6" />
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-bold text-white">
-                    {audioData.title}
-                  </h3>
-                  <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
-                    Voice Guide Available
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-                  Narrated by {audioData.speaker} ({duration ? formatTime(duration) : audioData.duration}).
-                  Listen to vocal walkthrough instructions for completing hands-on recognition tasks.
-                </p>
-              </div>
-            </div>
-
-            {/* Audio Action Buttons: Play Voice Instruction & Instruction */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                onClick={togglePlayAudio}
-                className="px-6 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_20px_rgba(0,245,196,0.25)] flex items-center justify-center gap-2 whitespace-nowrap transition-transform active:scale-95 cursor-pointer"
-              >
-                {isPlayingAudio ? (
-                  <>
-                    <Pause className="w-4 h-4 fill-current" />
-                    <span>Pause Voice Instruction</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Play Voice Instruction</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => setShowTranscript(!showTranscript)}
-                className={`px-4 py-3.5 rounded-xl font-bold text-xs sm:text-sm border transition-colors cursor-pointer flex items-center gap-2 ${
-                  showTranscript 
-                    ? 'bg-purple-950/40 border-purple-500/50 text-purple-300' 
-                    : 'bg-[#111c34] hover:bg-[#182849] border-slate-700 text-slate-300'
-                }`}
-                title="View activity instructions"
-              >
-                <BookOpen className="w-4 h-4" />
-                <span>Instruction</span>
-              </button>
-            </div>
-          </div>
-
-          {audioSource && (
-            <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
-              <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                <span>{formatTime(currentTime)}</span>
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setIsMuted(!isMuted)} 
-                    className="hover:text-white transition-colors cursor-pointer"
-                    title={isMuted ? 'Unmute' : 'Mute'}
-                  >
-                    {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
-                  </button>
-                  <span>{formatTime(duration || 0)}</span>
-                </div>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={duration || 100}
-                value={currentTime}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  setCurrentTime(val);
-                  if (audioRef.current) {
-                    audioRef.current.currentTime = val;
-                  }
-                }}
-                className="w-full accent-[#00f5c4] h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-              />
-            </div>
-          )}
-
-          {isPlayingAudio && (
-            <div className="p-4 rounded-xl bg-cyan-950/30 border border-[#00f5c4]/40 flex items-center justify-between text-xs font-mono text-[#00f5c4] animate-in fade-in duration-200">
-              <div className="flex items-center gap-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00f5c4] animate-ping" />
-                <span>
-                  {isSynthesizing 
-                    ? `Live Speech Synthesizer: ${audioData.speaker} (Transcribing Audio)`
-                    : `Now Playing: Voice Instruction (${audioData.speaker})`
-                  }
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                {[40, 70, 20, 90, 50, 80, 30, 100, 60, 40, 80, 50].map((h, i) => (
-                  <div
-                    key={i}
-                    style={{ height: `${h}%` }}
-                    className="w-1 bg-[#00f5c4] rounded-full animate-pulse"
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {showTranscript && (
-            <div className="p-4 rounded-2xl bg-[#080d19] border border-purple-500/30 space-y-2 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between text-xs font-mono text-purple-300">
-                <span className="font-bold flex items-center gap-1.5 uppercase tracking-wider">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  INSTRUCTION
-                </span>
-                <span className="text-slate-500">Class IX DTI Voice Guide</span>
-              </div>
-              <div className="text-xs sm:text-sm text-slate-300 leading-relaxed bg-purple-950/20 p-4 rounded-xl border border-purple-900/40 whitespace-pre-line space-y-2">
-                {audioData.transcript}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ----------------- FULLSCREEN INTERACTIVE EMBEDDED ACTIVITY MODAL ----------------- */}
@@ -500,6 +387,7 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
             <div className="flex-1 w-full bg-black relative">
               <iframe
                 key={iframeKey}
+                ref={activityFrameRef}
                 src={activeActivity.url}
                 title={activeActivity.title}
                 allow="camera *; microphone *; autoplay *; fullscreen *"

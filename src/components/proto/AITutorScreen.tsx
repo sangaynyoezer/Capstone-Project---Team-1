@@ -6,6 +6,7 @@ interface ChatMessage {
   role: 'user' | 'bot' | 'system';
   content: string;
   source?: string;
+  sourceLinks?: { label: string; url: string }[];
   isError?: boolean;
 }
 
@@ -202,7 +203,11 @@ export const AITutorScreen: React.FC = () => {
   };
 
   // Intelligent Socratic Tutor reasoning based strictly on Chapter 10 textbook content
-  const generateTutorResponse = (query: string): { reply: string; source: string } => {
+  const generateTutorResponse = (query: string): {
+    reply: string;
+    source: string;
+    sourceLinks?: { label: string; url: string }[];
+  } => {
     const q = query.toLowerCase();
 
     // 1. Definition of recognition system
@@ -311,6 +316,39 @@ How does ADC save time compared to manual typing?`,
       };
     }
 
+    // Keep unfamiliar Chapter 10 questions grounded in the textbook rather than guessing.
+    if (!/\b(recognition|biometric|fingerprint|iris|facial|speech|gesture|image|text recognition|ocr|emotion|automated data capture|adc|sensor|cctv|smart home|aics|privacy|bias|limitation|benefit|classification|feature extraction|pattern matching|pre-processing|template)\b/.test(q)) {
+      const encodedQuery = encodeURIComponent(query.trim());
+      const sourceLinks = [
+        {
+          label: 'Khan Academy: search this topic',
+          url: `https://www.khanacademy.org/search?page_search_query=${encodedQuery}`,
+        },
+        {
+          label: 'Britannica: find reference articles',
+          url: `https://www.google.com/search?q=${encodedQuery}+site%3Abritannica.com`,
+        },
+      ];
+
+      if (/\b(ai|artificial intelligence|machine learning|deep learning|neural network)\b/.test(q)) {
+        sourceLinks.unshift({
+          label: 'Google: Machine Learning Crash Course',
+          url: 'https://developers.google.com/machine-learning/crash-course',
+        });
+      } else if (/\b(html|css|javascript|typescript|programming|web development|coding)\b/.test(q)) {
+        sourceLinks.unshift({
+          label: 'MDN: search web development guides',
+          url: `https://developer.mozilla.org/en-US/search?q=${encodedQuery}`,
+        });
+      }
+
+      return {
+        reply: `That question looks like it is outside Chapter 10, so I can't verify the answer from our textbook. These learning resources can help you research it. Check the information against a trusted source and ask your teacher if you need help.`,
+        source: 'External learning resources',
+        sourceLinks,
+      };
+    }
+
     // 8. General textbook fallback
     return {
       reply: `That's a great question about "${query}". 
@@ -341,12 +379,13 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
     setIsTyping(true);
 
     setTimeout(() => {
-      const { reply, source } = generateTutorResponse(text);
+      const { reply, source, sourceLinks } = generateTutorResponse(text);
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'bot',
         content: reply,
         source,
+        sourceLinks,
       };
 
       setMessages((prev) => [...prev, botMsg]);
@@ -468,6 +507,22 @@ Would you like to look at the 6-step recognition cycle, real-world examples like
                       <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
                       <span>📖 Source: {m.source}</span>
                     </div>
+                  )}
+                  {!isUser && m.sourceLinks && (
+                    <ul className="mt-2 space-y-1.5 text-xs">
+                      {m.sourceLinks.map((source) => (
+                        <li key={source.url}>
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-300 underline underline-offset-2 hover:text-cyan-100"
+                          >
+                            {source.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </div>
