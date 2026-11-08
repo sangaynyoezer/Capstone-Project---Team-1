@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Users, GraduationCap, School, Award, Mail, IdCard, CheckCircle2 } from 'lucide-react';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface CreatorsModalProps {
   isOpen: boolean;
@@ -66,7 +67,7 @@ export const CreatorsModal: React.FC<CreatorsModalProps> = ({ isOpen, onClose })
         <div className="flex items-start gap-4 pr-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0b172e] to-[#050b17] border border-[#00f5c4]/40 flex items-center justify-center p-2 flex-shrink-0 shadow-[0_0_20px_rgba(0,245,196,0.25)]">
             <img 
-              src="/assets/logo_eye.png" 
+              src={assetUrl('assets/logo_eye.png')}
               alt="AI Recognition System Eye Logo" 
               className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(0,245,196,0.35)]"
             />
@@ -196,7 +197,7 @@ export const CreatorsModal: React.FC<CreatorsModalProps> = ({ isOpen, onClose })
         {/* Project Banner Visual */}
         <div className="rounded-2xl overflow-hidden border border-[#1e2f4f] bg-[#070b16] shadow-inner">
           <img 
-            src="/assets/aistudio/Gemini_Generated_Image_ohi75yohi75yohi7_afdc3e63.jpg" 
+            src={assetUrl('assets/aistudio/Gemini_Generated_Image_ohi75yohi75yohi7_afdc3e63.jpg')}
             alt="AI Recognition System Official Banner" 
             className="w-full h-28 object-cover object-center"
           />

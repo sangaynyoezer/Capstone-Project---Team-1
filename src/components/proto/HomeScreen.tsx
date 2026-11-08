@@ -3,6 +3,7 @@ import {
   ArrowRight, Video, BookOpen, Compass, Users, Code, MessageSquare, 
   Sparkles, Layers, ShieldCheck, Globe, HelpCircle, CheckCircle2, Quote, FolderPlus
 } from 'lucide-react';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface HomeScreenProps {
   onStartLearning: () => void;
@@ -113,7 +114,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="lg:col-span-5 flex justify-center">
             <div className="relative w-full max-w-md aspect-[16/10] rounded-2xl bg-[#0b1222] border border-[#1a2b4b] shadow-2xl overflow-hidden flex flex-col justify-between group hover:border-[#00f5c4]/60 transition-all">
               <img 
-                src="/assets/aistudio/Gemini_Generated_Image_ohi75yohi75yohi7_afdc3e63.jpg" 
+                src={assetUrl('assets/aistudio/Gemini_Generated_Image_ohi75yohi75yohi7_afdc3e63.jpg')}
                 alt="AI Recognition System Official Artwork" 
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
@@ -233,7 +234,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Bhutanese Student Illustration Box */}
             <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-xl bg-[#0f172a] border border-cyan-500/30 flex-shrink-0 overflow-hidden">
               <img 
-                src="/assets/bhutan_student_simple.jpg" 
+                src={assetUrl('assets/bhutan_student_simple.jpg')}
                 alt="Bhutanese Student" 
                 className="w-full h-full object-cover object-center"
               />
@@ -257,7 +258,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {/* Bhutanese Teacher Illustration Box */}
             <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-xl bg-[#0f172a] border border-rose-500/30 flex-shrink-0 overflow-hidden">
               <img 
-                src="/assets/bhutan_teacher_simple.jpg" 
+                src={assetUrl('assets/bhutan_teacher_simple.jpg')}
                 alt="Bhutanese Teacher" 
                 className="w-full h-full object-cover object-center"
               />

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Terminal, Shield, Github, BookOpen, Award, ExternalLink, Cpu } from 'lucide-react';
+import { assetUrl } from '../utils/assetUrl';
 
 interface FooterProps {
   onSelectCategory: (category: string) => void;
@@ -23,7 +24,7 @@ export const Footer: React.FC<FooterProps> = ({
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-slate-900 border border-cyan-500/40 p-1 flex items-center justify-center">
                 <img
-                  src="/assets/aistudio/image_159078bf.png"
+                  src={assetUrl('assets/aistudio/image_159078bf.png')}
                   alt="AI Recognition System Logo"
                   className="h-full w-full object-contain"
                 />

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trophy, Award, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw, Printer, Download, Lock } from 'lucide-react';
 import { COURSE_MATERIALS, QuizQuestion } from '../../materialsConfig';
 import confetti from 'canvas-confetti';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface AssessmentScreenProps {
   lessonsCompletedCount: number;
@@ -414,7 +415,7 @@ export const AssessmentScreen: React.FC<AssessmentScreenProps> = ({
             <div className="p-6 rounded-2xl bg-[#070b16] border border-cyan-500/40 space-y-4">
               <div className="w-16 h-16 rounded-2xl bg-[#070b16] border border-[#00f5c4] flex items-center justify-center p-2 mx-auto shadow-[0_0_20px_#00f5c4] overflow-hidden">
                 <img 
-                  src="/assets/logo_eye.png" 
+                  src={assetUrl('assets/logo_eye.png')}
                   alt="AI Recognition System Eye Logo" 
                   className="w-full h-full object-contain"
                 />

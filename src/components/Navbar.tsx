@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Bell
 } from 'lucide-react';
+import { assetUrl } from '../utils/assetUrl';
 
 interface NavbarProps {
   activeTab: 'catalog' | 'lab' | 'dashboard' | 'paths';
@@ -64,7 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <div className="relative flex items-center justify-center h-11 w-11 rounded-xl bg-gradient-to-br from-cyan-950 via-slate-900 to-indigo-950 border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.25)] overflow-hidden group-hover:border-cyan-400 transition">
               <img 
-                src="/assets/aistudio/image_159078bf.png" 
+                src={assetUrl('assets/aistudio/image_159078bf.png')}
                 alt="AI Recognition System Logo" 
                 className="h-full w-full object-cover scale-125 object-center"
               />

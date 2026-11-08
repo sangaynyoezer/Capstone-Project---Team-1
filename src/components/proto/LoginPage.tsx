@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, User, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, Sparkles, AlertCircle, Check, BadgeCheck } from 'lucide-react';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface LoginPageProps {
   onLoginSuccess: (email: string, username: string, name: string) => void;
@@ -176,7 +177,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         <div className="text-center space-y-2">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0b172e] to-[#050b17] border border-[#00f5c4]/40 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(0,245,196,0.25)] p-2">
             <img 
-              src="/assets/logo_eye.png" 
+              src={assetUrl('assets/logo_eye.png')}
               alt="AI Recognition System Eye Logo" 
               className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(0,245,196,0.35)]"
             />

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface ProtoNavbarProps {
   activeTab: 'home' | 'lessons' | 'activities' | 'notes' | 'tutor' | 'assessment' | 'login';
@@ -37,7 +38,7 @@ export const ProtoNavbar: React.FC<ProtoNavbarProps> = ({
           {/* Eye Logo Icon */}
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0b172e] to-[#050b17] border border-[#00f5c4]/40 flex items-center justify-center shadow-[0_0_14px_rgba(0,245,196,0.25)] group-hover:scale-105 group-hover:border-[#00f5c4] group-hover:shadow-[0_0_20px_rgba(0,245,196,0.45)] transition-all p-1">
             <img 
-              src="/assets/logo_eye.png" 
+              src={assetUrl('assets/logo_eye.png')}
               alt="AI Recognition System Eye Logo" 
               className="w-full h-full object-contain filter drop-shadow-[0_0_6px_rgba(0,245,196,0.35)]"
             />

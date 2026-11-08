@@ -16,6 +16,8 @@
  * =========================================================================================
  */
 
+import { assetUrl } from './utils/assetUrl';
+
 export interface VideoMaterial {
   slotId: string;
   title: string;
@@ -100,7 +102,7 @@ export const COURSE_MATERIALS = {
       title: 'AI Recognition Cycle',
       subtitle: 'EXPLAINER ANIMATION',
       duration: '04:12',
-      posterImage: '/assets/aistudio/image_901c3e75.png',
+      posterImage: assetUrl('assets/aistudio/image_901c3e75.png'),
       embedUrl: 'https://youtu.be/PUE9JxUIaC0',
       description: 'Animated visual breakdown tracing sensory light input, digital normalization, matrix alignment, and confidence scoring in real time.',
     } as VideoMaterial,
@@ -114,7 +116,7 @@ export const COURSE_MATERIALS = {
       title: 'Types of Recognition Systems',
       subtitle: 'LECTURE VIDEO CLIPS',
       duration: '06:45',
-      posterImage: '/assets/aistudio/image_519fbce2.png',
+      posterImage: assetUrl('assets/aistudio/image_519fbce2.png'),
       embedUrl: 'https://youtu.be/_DnfUSonn5k',
       description: 'Watch how digital systems capture biometric vectors in our laboratory video. Learn how text scanner OCR converts letters in real-time, and observe how soundwave waveforms filter vocal dynamics.',
     } as VideoMaterial,
@@ -128,7 +130,7 @@ export const COURSE_MATERIALS = {
       title: 'AI Recognition in the Real World',
       subtitle: 'CO-LEARNING SIMULATOR',
       duration: '05:30',
-      posterImage: '/assets/aistudio/image_e84fa640.png',
+      posterImage: assetUrl('assets/aistudio/image_e84fa640.png'),
       embedUrl: 'https://youtu.be/CdpsGjuaXaQ',
       description: "Two students act as 'System Administrator' and 'Client sensor' to debug a gateway recognition system live. Watch how raw scan coordinates clear security manifests!",
     } as VideoMaterial,
@@ -146,7 +148,7 @@ export const COURSE_MATERIALS = {
       slotId: 'SLOT_AUDIO_ACTIVITIES',
       title: 'Voice Instruction',
       speaker: 'Class IX DTI Instructor',
-      audioUrl: '/assets/aistudio/Voice_instruction_32219017.m4a',
+      audioUrl: assetUrl('assets/aistudio/Voice_instruction_32219017.m4a'),
       duration: '01:16',
       transcript: `Welcome, Class IX students, to the interactive AI Recognition System lab activities! Today, you will experience artificial intelligence and computer vision in real time through two hands-on activities.
 

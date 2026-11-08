@@ -10,6 +10,7 @@ import {
   ArrowRight,
   BookOpen
 } from 'lucide-react';
+import { assetUrl } from '../utils/assetUrl';
 
 interface HeroBannerProps {
   onExploreCourses: () => void;
@@ -144,7 +145,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               {/* Primary Visual: The Logo Visual Container */}
               <div className="relative rounded-xl overflow-hidden border border-cyan-500/40 bg-slate-950 aspect-video flex items-center justify-center p-2 group-hover:border-cyan-400 transition">
                 <img 
-                  src="/assets/aistudio/image_159078bf.png" 
+                  src={assetUrl('assets/aistudio/image_159078bf.png')}
                   alt="AI Recognition System Architecture Preview" 
                   className="w-full h-full object-contain filter drop-shadow-[0_0_20px_rgba(6,182,212,0.35)]"
                 />

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { COURSE_MATERIALS } from '../../materialsConfig';
 import { ambientMusic } from '../../utils/ambientAudio';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface ActivitiesScreenProps {
   onActivityComplete: (actId: string) => void;
@@ -40,7 +41,7 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
       duration: '15 Mins',
       badge: 'ACTIVITY 01 • FACIAL AI',
       description: 'Start your camera to analyze facial expressions in real-time. Test Free Play, try the Scenario Challenge to see if AI agrees with how you feel, or beat the Quick Mirror timer!',
-      url: '/assets/aistudio/Facial_activity_-_scenarios_d6d9af08.html',
+      url: assetUrl('assets/aistudio/Facial_activity_-_scenarios_d6d9af08.html'),
       features: [
         'Real-time facial blendshape tracking with MediaPipe',
         '3 Game Modes: Free Play, Scenario Challenge, Quick Mirror',
@@ -56,7 +57,7 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
       duration: '15 Mins',
       badge: 'ACTIVITY 02 • GESTURE CONTROL',
       description: 'Point your index finger in the air like a magic wand to hover over and select answers! A live camera 10-question quiz testing your knowledge of AI Recognition System types.',
-      url: '/assets/aistudio/Quiz__2__4cb863b4.html',
+      url: assetUrl('assets/aistudio/Quiz__2__4cb863b4.html'),
       features: [
         'Live hand & finger landmark tracking via MediaPipe',
         'Air-hover magic wand answer selection',
@@ -73,7 +74,7 @@ export const ActivitiesScreen: React.FC<ActivitiesScreenProps> = ({
 
   // Audio state for recorded voice instruction
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
-  const [audioSource, setAudioSource] = useState<string>(audioData.audioUrl || '/assets/aistudio/Voice_instruction_32219017.m4a');
+  const [audioSource, setAudioSource] = useState<string>(audioData.audioUrl || assetUrl('assets/aistudio/Voice_instruction_32219017.m4a'));
   const [showTranscript, setShowTranscript] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);

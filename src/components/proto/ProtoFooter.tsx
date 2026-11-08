@@ -1,5 +1,6 @@
 import React from 'react';
 import { Github, Twitter, Facebook, Video } from 'lucide-react';
+import { assetUrl } from '../../utils/assetUrl';
 
 interface ProtoFooterProps {
   onNavigateTab: (tab: 'home' | 'lessons' | 'activities' | 'notes' | 'tutor' | 'assessment' | 'login') => void;
@@ -18,7 +19,7 @@ export const ProtoFooter: React.FC<ProtoFooterProps> = ({ onNavigateTab }) => {
             >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0b172e] to-[#050b17] border border-[#00f5c4]/40 flex items-center justify-center shadow-[0_0_12px_rgba(0,245,196,0.25)] group-hover:border-[#00f5c4] transition-all p-0.5">
                 <img 
-                  src="/assets/logo_eye.png" 
+                  src={assetUrl('assets/logo_eye.png')}
                   alt="RecognAI Logo" 
                   className="w-full h-full object-contain filter drop-shadow-[0_0_4px_rgba(0,245,196,0.3)]"
                 />

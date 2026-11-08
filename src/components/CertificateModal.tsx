@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Course } from '../types/course';
 import { X, Award, Printer, Check, Copy, ShieldCheck, Download, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { assetUrl } from '../utils/assetUrl';
 
 interface CertificateModalProps {
   course: Course;
@@ -98,7 +99,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="h-16 w-16 rounded-2xl bg-slate-950 border border-cyan-500/50 p-1 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.3)]">
               <img
-                src="/assets/aistudio/image_159078bf.png"
+                src={assetUrl('assets/aistudio/image_159078bf.png')}
                 alt="AI Recognition System"
                 className="h-full w-full object-contain"
               />
