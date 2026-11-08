@@ -7,7 +7,21 @@ interface ChatMessage {
   content: string;
   source?: string;
   sourceLinks?: { label: string; url: string }[];
+  expectedConcepts?: string[][];
+  conceptLabels?: string[];
+  conceptHints?: string[];
+  collectedAnswer?: string;
   isError?: boolean;
+}
+
+interface TutorResponse {
+  reply: string;
+  source: string;
+  sourceLinks?: { label: string; url: string }[];
+  expectedConcepts?: string[][];
+  conceptLabels?: string[];
+  conceptHints?: string[];
+  collectedAnswer?: string;
 }
 
 interface SpeechRecognitionAlternativeLike {
@@ -296,12 +310,66 @@ export const AITutorScreen: React.FC = () => {
     }
   };
 
-  // Intelligent Socratic Tutor reasoning based strictly on Chapter 10 textbook content
-  const generateTutorResponse = (query: string): {
-    reply: string;
-    source: string;
-    sourceLinks?: { label: string; url: string }[];
-  } => {
+  const normalizeAnswer = (text: string) =>
+    text.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim();
+
+  const isLikelyNewQuestion = (text: string) =>
+    /\?$/.test(text.trim()) ||
+    /^(what|why|how|when|where|who|which|can|could|would|should|is|are|do|does|did|tell me|explain|define)\b/i.test(text.trim());
+
+  const matchesExpectedConcept = (answer: string, concepts: string[]) => {
+    const normalizedAnswer = normalizeAnswer(answer);
+    return concepts.some((concept) => {
+      const normalizedConcept = normalizeAnswer(concept);
+      if (` ${normalizedAnswer} `.includes(` ${normalizedConcept} `)) return true;
+      if (normalizedConcept.includes(' ')) return false;
+      return normalizedAnswer.split(' ').some((word) =>
+        word === normalizedConcept ||
+        (normalizedConcept.length >= 4 && word.length > normalizedConcept.length && word.startsWith(normalizedConcept))
+      );
+    });
+  };
+
+  const hasExpectedAnswerConcept = (answer: string, previousPrompt: ChatMessage) =>
+    (previousPrompt.expectedConcepts ?? []).some((concepts) => matchesExpectedConcept(answer, concepts));
+
+  const evaluateStudentAnswer = (answer: string, previousPrompt: ChatMessage) => {
+    const combinedAnswer = [previousPrompt.collectedAnswer, answer].filter(Boolean).join(' ');
+    const matchedConcepts = (previousPrompt.expectedConcepts ?? []).map((concepts, index) => ({
+      index,
+      matched: matchesExpectedConcept(combinedAnswer, concepts),
+    }));
+    const matchedIndexes = matchedConcepts.filter(({ matched }) => matched).map(({ index }) => index);
+    const missingIndexes = matchedConcepts.filter(({ matched }) => !matched).map(({ index }) => index);
+    const labels = previousPrompt.conceptLabels ?? [];
+    const hints = previousPrompt.conceptHints ?? [];
+
+    if (matchedIndexes.length === matchedConcepts.length && matchedConcepts.length > 0) {
+      return {
+        complete: true,
+        answer: combinedAnswer,
+        reply: `Good reasoning—you connected ${matchedIndexes.map((index) => labels[index]).join(' and ')}. You’ve shown the key idea. What would you like to explore next?`,
+      };
+    }
+
+    if (matchedIndexes.length > 0) {
+      const missingHint = hints[missingIndexes[0]] ?? 'Think about the other part of the question.';
+      return {
+        complete: false,
+        answer: combinedAnswer,
+        reply: `You have part of it: your answer includes ${matchedIndexes.map((index) => labels[index]).join(' and ')}. One idea is still missing. Hint: ${missingHint} Can you add that part?`,
+      };
+    }
+
+    return {
+      complete: false,
+      answer: combinedAnswer,
+      reply: `Thanks for trying. Let's connect your answer back to the question. Hint: ${hints[0] ?? 'Look for the key idea in the example I gave.'} In the example above, what clue would help you decide?`,
+    };
+  };
+
+  // Socratic prompts and follow-up checks are grounded in the Chapter 10 textbook.
+  const generateTutorResponse = (query: string): TutorResponse => {
     const q = query.toLowerCase();
     const socraticReply = (hint: string, example: string, question: string) =>
       `Let's reason it out together.\n\nHint: ${hint}\n\nReal-life example: ${example}\n\nYour turn: ${question}`;
@@ -314,6 +382,12 @@ export const AITutorScreen: React.FC = () => {
           'What do you think should happen first, and which step would improve a noisy image?'
         ),
         source: 'Recognition System Cycle (6 steps)',
+        expectedConcepts: [
+          ['input', 'sensing', 'sensor', 'camera', 'collect', 'capture'],
+          ['pre-processing', 'preprocessing', 'clean', 'cleaning', 'noise', 'blur', 'lighting'],
+        ],
+        conceptLabels: ['the system first senses or collects input', 'pre-processing improves noisy or blurry data'],
+        conceptHints: ['What does the camera or microphone do before the system can analyze anything?', 'Which stage cleans the input or corrects blur and noise?'],
       };
     }
 
@@ -325,6 +399,12 @@ export const AITutorScreen: React.FC = () => {
           'Which concern would affect a student most in this example, and what safeguard could help?'
         ),
         source: 'Limitations of AI Recognition System',
+        expectedConcepts: [
+          ['poor lighting', 'dark', 'lighting', 'accuracy', 'inaccurate', 'error', 'mistake', 'bias', 'biased', 'misrecognize', 'misidentify'],
+          ['privacy', 'protect', 'secure', 'security', 'consent', 'encrypt', 'permission'],
+        ],
+        conceptLabels: ['recognition accuracy can fail in poor conditions', 'personal biometric data needs protection'],
+        conceptHints: ['What might a dark or blurry camera image do to the accuracy of recognition?', 'What should a school do to keep stored face or fingerprint data safe?'],
       };
     }
 
@@ -336,6 +416,12 @@ export const AITutorScreen: React.FC = () => {
           'What kind of personal feature might help the system check identity, and why should that data be protected?'
         ),
         source: 'ICT in Context (Interesting Facts)',
+        expectedConcepts: [
+          ['face', 'facial', 'fingerprint', 'iris', 'biometric', 'body feature', 'physical feature'],
+          ['identity', 'verify', 'verification', 'match', 'compare', 'record', 'template', 'stored pattern'],
+        ],
+        conceptLabels: ['a biometric feature such as a face or fingerprint', 'checking it against an identity record'],
+        conceptHints: ['Which unique physical feature could the scanner read?', 'What does the system compare that feature with before making a decision?'],
       };
     }
 
@@ -347,6 +433,12 @@ export const AITutorScreen: React.FC = () => {
           'Which part of that example is being collected automatically, and how could it save time?'
         ),
         source: 'Tips: Automated Data Capture (ADC)',
+        expectedConcepts: [
+          ['attendance', 'fingerprint', 'scan', 'scanner', 'student', 'data', 'information'],
+          ['automatically', 'automatic', 'without typing', 'manual typing', 'typing', 'time', 'faster', 'quick'],
+        ],
+        conceptLabels: ['the scanner collects attendance information', 'it reduces manual entry'],
+        conceptHints: ['What information is the school scanner collecting?', 'How is scanning different from typing each student’s details by hand?'],
       };
     }
 
@@ -358,6 +450,12 @@ export const AITutorScreen: React.FC = () => {
           'What becomes easier for the user, and what should the phone still do to protect the owner?'
         ),
         source: 'Benefits of AI Recognition System',
+        expectedConcepts: [
+          ['convenient', 'convenience', 'easy', 'easier', 'quick', 'fast', 'time', 'effort'],
+          ['password', 'secure', 'security', 'protect', 'owner', 'consent', 'privacy'],
+        ],
+        conceptLabels: ['recognition can make access quicker or more convenient', 'security and privacy still matter'],
+        conceptHints: ['What does recognizing the owner save them from doing every time?', 'What should happen if the phone is not sure who is looking at it?'],
       };
     }
 
@@ -369,6 +467,12 @@ export const AITutorScreen: React.FC = () => {
           'Which physical detail is the scanner using, and what is the name for a stored pattern used in a comparison?'
         ),
         source: 'Types of Recognition Systems (Table 10.1) & Key Words',
+        expectedConcepts: [
+          ['fingerprint', 'iris', 'face', 'facial', 'biometric', 'body feature', 'physical feature'],
+          ['template', 'stored pattern', 'pattern', 'record', 'compare', 'match', 'identity', 'verify'],
+        ],
+        conceptLabels: ['a unique physical trait', 'a stored pattern or record used for comparison'],
+        conceptHints: ['Which body feature is unique to the person?', 'What stored digital pattern is compared with that feature?'],
       };
     }
 
@@ -380,6 +484,12 @@ export const AITutorScreen: React.FC = () => {
           'What does the device need to identify in the audio before it can follow your command?'
         ),
         source: 'Types of Recognition Systems (Table 10.1)',
+        expectedConcepts: [
+          ['word', 'words', 'speech', 'spoken', 'voice', 'command', 'audio'],
+          ['text', 'action', 'instruction', 'phoneme', 'meaning', 'recognize', 'recognise', 'identify'],
+        ],
+        conceptLabels: ['the spoken words or sounds', 'identifying them so the device can produce text or an action'],
+        conceptHints: ['What is the person saying to the device?', 'What must the system do with those sounds before it can act?'],
       };
     }
 
@@ -391,6 +501,12 @@ export const AITutorScreen: React.FC = () => {
           'What information about the hand’s movement would help the system decide which action you intended?'
         ),
         source: 'Types of Recognition Systems (Table 10.1)',
+        expectedConcepts: [
+          ['hand', 'gesture', 'movement', 'motion', 'position', 'angle', 'finger'],
+          ['track', 'tracking', 'classify', 'classification', 'action', 'command', 'control', 'compare', 'match', 'pattern'],
+        ],
+        conceptLabels: ['the hand’s movement or position', 'tracking it to interpret an action'],
+        conceptHints: ['What movement or position does the camera observe?', 'How could the system use that movement to choose an action?'],
       };
     }
 
@@ -402,6 +518,12 @@ export const AITutorScreen: React.FC = () => {
           'What visual clues might help it tell a dog from a cat?'
         ),
         source: 'Types of Recognition Systems (Table 10.1)',
+        expectedConcepts: [
+          ['shape', 'shapes', 'edge', 'edges', 'colour', 'color', 'feature', 'pattern', 'visual', 'pixel'],
+          ['compare', 'match', 'identify', 'recognize', 'recognise', 'classify', 'trained', 'learned', 'learn'],
+        ],
+        conceptLabels: ['visual clues such as shapes and edges', 'comparing those clues with learned patterns'],
+        conceptHints: ['What visible details can you notice in a picture?', 'How could the system use those details to decide what is shown?'],
       };
     }
 
@@ -413,6 +535,12 @@ export const AITutorScreen: React.FC = () => {
           'What could make an expression-recognition system misread a person, and why should its result be treated carefully?'
         ),
         source: 'Types of Recognition Systems (Table 10.1) & Limitations',
+        expectedConcepts: [
+          ['expression', 'face', 'facial', 'eyebrow', 'mouth', 'lighting', 'culture', 'context', 'different'],
+          ['not always', 'cannot know', 'cannot fully understand', 'misread', 'misinterpret', 'uncertain', 'careful', 'assume'],
+        ],
+        conceptLabels: ['expressions can be affected by context or appearance', 'a system cannot know a person’s full feelings for certain'],
+        conceptHints: ['Can the same facial expression always mean the same thing for every person?', 'What should we avoid assuming from a system’s guess about someone’s feelings?'],
       };
     }
 
@@ -424,6 +552,12 @@ export const AITutorScreen: React.FC = () => {
           'What does the system need to identify on the page before it can produce editable text?'
         ),
         source: 'Types of Recognition Systems (Table 10.1)',
+        expectedConcepts: [
+          ['letter', 'letters', 'character', 'characters', 'text', 'word', 'words'],
+          ['scan', 'image', 'photo', 'pattern', 'recognize', 'recognise', 'identify', 'digital', 'editable'],
+        ],
+        conceptLabels: ['the letters or characters on the page', 'recognizing them and converting them into digital text'],
+        conceptHints: ['What symbols are printed or handwritten on the page?', 'What should the scanner produce after identifying each symbol?'],
       };
     }
 
@@ -435,6 +569,12 @@ export const AITutorScreen: React.FC = () => {
           'What does the system receive, and what is it trying to identify?'
         ),
         source: 'Section 10.1: Recognition Systems in Artificial Intelligence',
+        expectedConcepts: [
+          ['input', 'image', 'speech', 'sound', 'data', 'face', 'voice', 'pattern'],
+          ['identify', 'identifies', 'recognize', 'recognises', 'recognizes', 'classify', 'classification', 'interpret'],
+        ],
+        conceptLabels: ['the system receives real-world input', 'it identifies or classifies a pattern in that input'],
+        conceptHints: ['What might a camera, microphone, or scanner give the computer?', 'What is the computer trying to find in that input?'],
       };
     }
 
@@ -477,12 +617,54 @@ export const AITutorScreen: React.FC = () => {
         'Which part of your question is about the input, and what evidence would help you work out the system’s decision?'
       ),
       source: 'Section 10.1 & Chapter 10 Overview',
+      expectedConcepts: [
+        ['input', 'sensor', 'camera', 'sound', 'image', 'data', 'sensing', 'movement'],
+        ['pattern', 'feature', 'match', 'compare', 'identify', 'recognize', 'recognise', 'classify', 'decision', 'output'],
+      ],
+      conceptLabels: ['the input the system senses', 'the pattern it analyzes to make a decision'],
+      conceptHints: ['What does the camera, microphone, or other sensor detect?', 'What feature or pattern does the system look for in that input?'],
     };
   };
 
   const handleSend = (textToSend?: string) => {
     const text = textToSend || input;
     if (!text.trim()) return;
+    let previousMessageIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].role !== 'system') {
+        previousMessageIndex = index;
+        break;
+      }
+    }
+
+    const latestMessage = messages[previousMessageIndex];
+    let previousUserMessage: ChatMessage | undefined;
+    for (let index = previousMessageIndex - 1; index >= 0; index -= 1) {
+      if (messages[index].role === 'user') {
+        previousUserMessage = messages[index];
+        break;
+      }
+    }
+
+    const regeneratedPrompt = latestMessage?.role === 'bot' && !latestMessage.expectedConcepts && previousUserMessage
+      ? generateTutorResponse(previousUserMessage.content)
+      : null;
+    const previousMessage =
+      latestMessage?.role === 'bot' && regeneratedPrompt?.expectedConcepts &&
+      regeneratedPrompt.source === latestMessage.source
+        ? {
+            ...latestMessage,
+            expectedConcepts: regeneratedPrompt.expectedConcepts,
+            conceptLabels: regeneratedPrompt.conceptLabels,
+            conceptHints: regeneratedPrompt.conceptHints,
+          }
+        : latestMessage;
+    const answerContext =
+      previousMessage?.role === 'bot' &&
+      previousMessage.expectedConcepts &&
+      (!isLikelyNewQuestion(text) || hasExpectedAnswerConcept(text, previousMessage))
+        ? previousMessage
+        : null;
 
     const recognition = recognitionRef.current;
     if (recognition) {
@@ -511,13 +693,34 @@ export const AITutorScreen: React.FC = () => {
     setIsTyping(true);
 
     setTimeout(() => {
-      const { reply, source, sourceLinks } = generateTutorResponse(text);
+      const response: TutorResponse = answerContext
+        ? (() => {
+            const evaluation = evaluateStudentAnswer(text.trim(), answerContext);
+            return {
+              reply: evaluation.reply,
+              source: answerContext.source ?? 'Chapter 10',
+              ...(!evaluation.complete
+                ? {
+                    expectedConcepts: answerContext.expectedConcepts,
+                    conceptLabels: answerContext.conceptLabels,
+                    conceptHints: answerContext.conceptHints,
+                    collectedAnswer: evaluation.answer,
+                  }
+                : {}),
+            };
+          })()
+        : generateTutorResponse(text);
+      const { reply, source, sourceLinks } = response;
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'bot',
         content: reply,
         source,
         sourceLinks,
+        expectedConcepts: response.expectedConcepts,
+        conceptLabels: response.conceptLabels,
+        conceptHints: response.conceptHints,
+        collectedAnswer: response.collectedAnswer,
       };
 
       setMessages((prev) => [...prev, botMsg]);
