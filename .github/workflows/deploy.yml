@@ -33,6 +33,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Supabase configuration
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ]; then
+            echo "::error::VITE_SUPABASE_URL is missing. Add it as a repository or github-pages environment Actions secret."
+            exit 1
+          fi
+          if [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::VITE_SUPABASE_ANON_KEY is missing. Add it as a repository or github-pages environment Actions secret."
+            exit 1
+          fi
+          case "$VITE_SUPABASE_URL" in
+            https://*.supabase.co) ;;
+            *)
+              echo "::error::VITE_SUPABASE_URL must be the project's root HTTPS URL, without /rest/v1/."
+              exit 1
+              ;;
+          esac
+
       - name: Build Vite application
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
