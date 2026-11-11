@@ -12,11 +12,12 @@
 
     body {
       margin: 0;
-      min-height: 100vh;
-      padding: 30px 18px;
+      height: 100dvh;
+      min-height: 0;
+      padding: 12px;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: stretch;
       font-family: Arial, sans-serif;
       color: #e5f3ff;
       background:
@@ -24,7 +25,7 @@
         radial-gradient(ellipse at 85% 85%, #102d50 0%, transparent 42%),
         #050b18;
       position: relative;
-      overflow-x: hidden;
+      overflow: hidden;
     }
 
     body::before {
@@ -42,22 +43,25 @@
       position: relative;
       z-index: 1;
       width: 100%;
-      max-width: 850px;
-      padding: 30px;
-      text-align: center;
+      max-width: 1400px;
+      min-height: 0;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      text-align: left;
       background: rgba(7, 16, 33, 0.94);
       border: 1px solid rgba(0, 195, 255, 0.4);
       border-radius: 22px;
       box-shadow: 0 0 30px rgba(0, 195, 255, 0.12), 0 15px 50px rgba(0, 0, 0, 0.45);
     }
 
-    .top-label { color: #00c3ff; font-size: 11px; letter-spacing: 4px; font-weight: bold; margin-bottom: 12px; }
+    .top-label { color: #00c3ff; font-size: 10px; letter-spacing: 3px; font-weight: bold; margin-bottom: 5px; }
 
-    h1 { margin: 0 0 12px; color: #67e8ff; font-size: 28px; text-shadow: 0 0 15px rgba(0, 195, 255, 0.4); }
+    h1 { margin: 0 0 4px; color: #67e8ff; font-size: 24px; text-shadow: 0 0 15px rgba(0, 195, 255, 0.4); }
 
-    .description { margin: 0 auto 20px; max-width: 650px; color: #a8c6df; line-height: 1.7; font-size: 14px; }
+    .description { margin: 0 0 8px; max-width: 900px; color: #a8c6df; line-height: 1.5; font-size: 13px; }
 
-    .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 auto 22px; }
+    .tabs { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin: 0 0 10px; }
 
     .tab {
       padding: 10px 18px; font-size: 12px; letter-spacing: 1px;
@@ -67,9 +71,21 @@
 
     .tab.active { color: #04101e; background: #67e8ff; border-color: #67e8ff; box-shadow: 0 0 14px rgba(0, 195, 255, 0.3); }
 
+    .activity-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.8fr);
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .camera-column, .control-column { min-width: 0; min-height: 0; }
+    .camera-column { display: flex; flex-direction: column; }
+    .control-column { overflow-y: auto; padding: 0 4px 4px 0; }
+
     .camera-heading {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      max-width: 640px; margin: 0 auto 10px;
+      margin: 0 0 8px;
       color: #8dbbd9; font-size: 11px; letter-spacing: 2px;
     }
 
@@ -79,9 +95,10 @@
     .camera-box {
       position: relative;
       width: 100%;
-      max-width: 640px;
-      aspect-ratio: 4 / 3;
-      margin: 0 auto;
+      flex: 1;
+      min-height: 180px;
+      max-height: 58vh;
+      margin: 0;
       overflow: hidden;
       border-radius: 16px;
       background: #151b2b;
@@ -149,11 +166,11 @@
       transition: width 0.1s linear;
     }
 
-    .status { margin: 16px 0; color: #67e8ff; font-size: 13px; min-height: 18px; }
+    .status { margin: 8px 0 0; color: #67e8ff; font-size: 12px; min-height: 18px; }
 
     /* ---------- AI readings (confidence bars) ---------- */
     .readings {
-      max-width: 640px; margin: 0 auto 14px; padding: 12px 16px;
+      margin: 0 0 12px; padding: 12px 14px;
       text-align: left; border-radius: 12px;
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(0, 195, 255, 0.2);
@@ -172,7 +189,7 @@
     .bar-hint { margin-top: 6px; font-size: 11px; color: #829bb5; }
 
     .result {
-      max-width: 640px; margin: 18px auto; padding: 22px;
+      margin: 0 0 12px; padding: 16px;
       border: 1px solid rgba(0, 195, 255, 0.35); border-radius: 16px;
       background: linear-gradient(135deg, rgba(13, 35, 65, 0.95), rgba(10, 22, 43, 0.95));
       box-shadow: inset 0 0 20px rgba(0, 195, 255, 0.04);
@@ -213,9 +230,20 @@
     .scoreboard th, .scoreboard td { padding: 6px 8px; border-bottom: 1px solid #1d3550; text-align: left; }
     .scoreboard th { color: #67e8ff; font-size: 11px; letter-spacing: 1px; }
 
-    .buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 20px; }
+    .buttons {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 10px 0 4px;
+      background: rgba(7, 16, 33, 0.96);
+      z-index: 8;
+    }
 
-    button { padding: 13px 24px; border: none; border-radius: 9px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    button { padding: 11px 16px; border: none; border-radius: 9px; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s; }
     button:hover { transform: translateY(-2px); }
     button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
@@ -223,19 +251,88 @@
     .stop-btn { color: #e5f3ff; background: #20324a; border: 1px solid #3d5976; }
     .go-btn { color: #04101e; background: #62f5a0; }
 
-    .note { margin-top: 20px; color: #829bb5; font-size: 11px; line-height: 1.6; }
-    .footer-label { margin-top: 20px; color: #456a8c; font-size: 10px; letter-spacing: 3px; }
+    .note { margin: 8px 0 0; color: #829bb5; font-size: 10px; line-height: 1.5; }
+    .footer-label { margin-top: 6px; color: #456a8c; font-size: 9px; letter-spacing: 2px; }
 
     .hidden { display: none !important; }
 
-    @media (max-width: 600px) {
-      body { padding: 12px; }
-      .container { padding: 18px; }
-      h1 { font-size: 23px; }
+    @media (max-width: 760px) {
+      body {
+        height: 100dvh;
+        padding: 8px;
+      }
+
+      .container {
+        padding: 14px 14px 92px;
+        overflow-y: auto;
+      }
+
+      h1 { font-size: 21px; }
       .expression { font-size: 20px; }
       .top-label { letter-spacing: 2px; }
       .scenario-card { font-size: 15px; }
-      .bar-row > span { width: 105px; }
+
+      .activity-layout {
+        display: flex;
+        flex-direction: column;
+        flex: none;
+        gap: 12px;
+      }
+
+      .camera-box {
+        flex: none;
+        height: min(43vh, 390px);
+        min-height: 210px;
+        aspect-ratio: auto;
+      }
+
+      .control-column { overflow: visible; }
+
+      .readings {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: 112px;
+        z-index: 12;
+        max-height: 135px;
+        overflow-y: auto;
+        margin: 0;
+        padding: 8px 10px;
+        background: rgba(7, 16, 33, 0.96);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+      }
+
+      .readings-title { margin-bottom: 4px; font-size: 9px; }
+      .bar-row { gap: 8px; margin: 4px 0; font-size: 11px; }
+      .bar-row > span { width: 112px; }
+      .bar-track { height: 8px; }
+      .bar-hint { display: none; }
+
+      .buttons {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        gap: 6px;
+        justify-content: center;
+        margin: 0;
+        padding: 6px;
+        border: 1px solid rgba(0, 195, 255, 0.25);
+        border-radius: 12px;
+        background: rgba(5, 11, 24, 0.97);
+        box-shadow: 0 0 18px rgba(0, 0, 0, 0.5);
+      }
+
+      .buttons button { padding: 8px 8px; font-size: 11px; }
+      .note, .footer-label { padding-bottom: 8px; }
+    }
+
+    @media (max-height: 560px) and (min-width: 761px) {
+      h1 { font-size: 20px; }
+      .description { font-size: 11px; }
+      .tabs { margin-bottom: 6px; }
+      .camera-box { max-height: 48vh; }
+      .note, .footer-label { display: none; }
     }
   </style>
 </head>
@@ -256,52 +353,58 @@
       <button class="tab" data-mode="quick">QUICK MIRROR</button>
     </div>
 
-    <div class="camera-heading">
-      <span>CAMERA INTERFACE</span>
-      <span class="live-indicator"><span class="live-dot"></span><span id="liveLabel">STANDBY</span></span>
-    </div>
+    <div class="activity-layout">
+      <section class="camera-column" aria-label="Camera preview">
+        <div class="camera-heading">
+          <span>CAMERA INTERFACE</span>
+          <span class="live-indicator"><span class="live-dot"></span><span id="liveLabel">STANDBY</span></span>
+        </div>
 
-    <div class="camera-box" id="cameraBox">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="canvas"></canvas>
+        <div class="camera-box" id="cameraBox">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="canvas"></canvas>
 
-      <div id="cameraMessage" class="camera-message">
-        <div class="camera-icon">⌁</div>
-        <div>Camera system on standby</div>
-        <div>Press START CAMERA to begin</div>
-      </div>
+          <div id="cameraMessage" class="camera-message">
+            <div class="camera-icon">⌁</div>
+            <div>Camera system on standby</div>
+            <div>Press START CAMERA to begin</div>
+          </div>
 
-      <div id="popup" class="popup">Expression detected</div>
-      <div id="overlay" class="overlay hidden"></div>
-      <div id="holdBar" class="hold-bar"></div>
-    </div>
+          <div id="popup" class="popup">Expression detected</div>
+          <div id="overlay" class="overlay hidden"></div>
+          <div id="holdBar" class="hold-bar"></div>
+        </div>
 
-    <div id="status" class="status">System waiting for camera access...</div>
+        <div id="status" class="status" aria-live="polite">System waiting for camera access...</div>
+      </section>
 
-    <div id="readings" class="readings hidden">
-      <div class="readings-title">WHAT THE AI MEASURES <span id="calState"></span></div>
-      <div class="bar-row" data-key="happy"><span>😊 Happy</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
-      <div class="bar-row" data-key="surprised"><span>😲 Surprised-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
-      <div class="bar-row" data-key="sad"><span>😢 Sad-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
-      <div class="bar-row" data-key="angry"><span>😠 Angry-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
-      <div class="bar-hint">An expression is recognised when its bar passes the white line.</div>
-    </div>
+      <section class="control-column" aria-label="Activity controls and AI readings">
+        <div id="readings" class="readings">
+          <div class="readings-title">WHAT THE AI MEASURES <span id="calState"></span></div>
+          <div class="bar-row" data-key="happy"><span>😊 Happy</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+          <div class="bar-row" data-key="surprised"><span>😲 Surprised-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+          <div class="bar-row" data-key="sad"><span>😢 Sad-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+          <div class="bar-row" data-key="angry"><span>😠 Angry-like</span><div class="bar-track"><div class="bar-fill"></div><div class="bar-mark"></div></div></div>
+          <div class="bar-hint">An expression is recognised when its bar passes the white line.</div>
+        </div>
 
-    <!-- FREE PLAY PANEL -->
-    <section id="freePanel" class="result">
-      <div class="result-label">Detected Expression</div>
-      <div id="emoji" class="emoji">◉</div>
-      <div id="expression" class="expression">System Standby</div>
-    </section>
+        <!-- FREE PLAY PANEL -->
+        <section id="freePanel" class="result">
+          <div class="result-label">Detected Expression</div>
+          <div id="emoji" class="emoji">◉</div>
+          <div id="expression" class="expression">System Standby</div>
+        </section>
 
-    <!-- CHALLENGE PANEL (scenario + quick mirror) -->
-    <section id="challengePanel" class="result hidden"></section>
+        <!-- CHALLENGE PANEL (scenario + quick mirror) -->
+        <section id="challengePanel" class="result hidden"></section>
 
-    <div class="buttons">
-      <button id="startBtn" class="start-btn">START CAMERA</button>
-      <button id="stopBtn" class="stop-btn" disabled>STOP CAMERA</button>
-      <button id="recalBtn" class="stop-btn" disabled>RECALIBRATE</button>
-      <button id="readingsBtn" class="stop-btn">SHOW AI READINGS</button>
+        <div class="buttons">
+          <button id="startBtn" class="start-btn">START CAMERA</button>
+          <button id="stopBtn" class="stop-btn" disabled>STOP CAMERA</button>
+          <button id="recalBtn" class="stop-btn" disabled>RECALIBRATE</button>
+          <button id="readingsBtn" class="stop-btn">HIDE AI READINGS</button>
+        </div>
+      </section>
     </div>
 
     <p class="note">
