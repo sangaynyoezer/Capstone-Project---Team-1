@@ -84,6 +84,8 @@ export interface TeacherMaterial {
   downloadUrl?: string; // Direct link (Google Drive, PDF URL, local file)
   fileSize?: string;
   fileType: 'PDF' | 'DOCX' | 'PPTX' | 'LINK';
+  storagePath?: string;
+  uploadedBy?: string;
   badge: string;
   tags: string[];
 }

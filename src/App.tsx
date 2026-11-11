@@ -13,22 +13,18 @@ import { NotesScreen } from './components/proto/NotesScreen';
 import { AITutorScreen } from './components/proto/AITutorScreen';
 import { AssessmentScreen } from './components/proto/AssessmentScreen';
 import { CreatorsModal } from './components/proto/CreatorsModal';
-import { LoginModal } from './components/proto/LoginModal';
 import { LoginPage } from './components/proto/LoginPage';
-
-interface StoredProgress {
-  userLoggedIn: boolean;
-  studentName: string;
-  studentId: string;
-  studentEmail?: string;
-  studentUsername?: string;
-  unlockedLessons: string[];
-  completedLessons: string[];
-  completedActivities: string[];
-  reviewedNotes: number[];
-}
+import { loadCourseProgress, saveCourseProgress, supabase, type CourseProgress } from './lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 const STORAGE_KEY = 'recognai_course_v1_progress';
+
+function getAccountType(user: User | null): 'student' | 'teacher' {
+  return user?.app_metadata.role === 'teacher' ||
+    user?.user_metadata.account_type === 'teacher'
+    ? 'teacher'
+    : 'student';
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'lessons' | 'activities' | 'notes' | 'tutor' | 'assessment' | 'login'>('home');
@@ -36,48 +32,26 @@ export default function App() {
 
   // Modals state
   const [isCreatorsOpen, setIsCreatorsOpen] = useState<boolean>(false);
-  const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
 
-  // User state: default NOT logged in for a first-time visitor
-  const [userLoggedIn, setUserLoggedIn] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved).userLoggedIn || false;
-    } catch {}
-    return false;
-  });
-
-  const [studentName, setStudentName] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved).studentName || '';
-    } catch {}
-    return '';
-  });
-
-  const [studentId, setStudentId] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved).studentId || '';
-    } catch {}
-    return '';
-  });
-
-  const [studentEmail, setStudentEmail] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved).studentEmail || '';
-    } catch {}
-    return '';
-  });
-
-  const [studentUsername, setStudentUsername] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved).studentUsername || '';
-    } catch {}
-    return '';
-  });
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [selectedAccountType, setSelectedAccountType] = useState<'student' | 'teacher'>('student');
+  const [authError, setAuthError] = useState<string>('');
+  const [loadedProgressUserId, setLoadedProgressUserId] = useState<string | null>(null);
+  const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
+  const userLoggedIn = Boolean(authUser) || isGuest;
+  const userMetadata = authUser?.user_metadata ?? {};
+  const studentName = typeof userMetadata.full_name === 'string'
+    ? userMetadata.full_name
+    : isGuest ? 'Guest Learner' : '';
+  const studentEmail = authUser?.email ?? '';
+  const studentUsername = typeof userMetadata.username === 'string'
+    ? userMetadata.username
+    : isGuest ? 'guest' : '';
+  const studentId = typeof userMetadata.student_id === 'string'
+    ? userMetadata.student_id
+    : isGuest ? 'guest' : studentUsername;
+  const teacherApproved = authUser?.app_metadata.role === 'teacher';
 
   // Real course progress state: for first-time login, only Lesson 1 is unlocked, 0 completed!
   const [unlockedLessons, setUnlockedLessons] = useState<string[]>(() => {
@@ -120,23 +94,99 @@ export default function App() {
     return [];
   });
 
-  // Save to localStorage whenever progress changes
   useEffect(() => {
-    const data: StoredProgress = {
-      userLoggedIn,
-      studentName,
-      studentId,
-      studentEmail,
-      studentUsername,
+    if (!supabase) return;
+
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) {
+        setAuthUser(session?.user ?? null);
+        setSelectedAccountType(getAccountType(session?.user ?? null));
+        setAuthError('');
+      }
+    });
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        setAuthError(`Could not restore your sign-in session: ${error.message}`);
+        return;
+      }
+      setAuthUser(data.session?.user ?? null);
+      setSelectedAccountType(getAccountType(data.session?.user ?? null));
+    }).catch((error: unknown) => {
+      if (active) {
+        setAuthError(error instanceof Error ? error.message : 'Could not restore your sign-in session.');
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      setLoadedProgressUserId(null);
+      setIsProgressLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLoadedProgressUserId(null);
+    setIsProgressLoading(true);
+
+    void loadCourseProgress(authUser.id).then((progress) => {
+      if (!active) return;
+
+      const savedProgress: CourseProgress = progress ?? {
+        unlockedLessons: ['lesson-1'],
+        completedLessons: [],
+        completedActivities: [],
+        reviewedNotes: [],
+      };
+      setUnlockedLessons(savedProgress.unlockedLessons);
+      setCompletedLessons(savedProgress.completedLessons);
+      setCompletedActivities(savedProgress.completedActivities);
+      setReviewedNotes(savedProgress.reviewedNotes);
+      setLoadedProgressUserId(authUser.id);
+      setAuthError('');
+    }).catch((error: unknown) => {
+      if (active) {
+        setAuthError(error instanceof Error ? error.message : 'Could not load your course progress.');
+      }
+    }).finally(() => {
+      if (active) setIsProgressLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [authUser?.id]);
+
+  // Save progress locally and, for signed-in users, to their private database row.
+  useEffect(() => {
+    const progress: CourseProgress = {
       unlockedLessons,
       completedLessons,
       completedActivities,
       reviewedNotes,
     };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {}
-  }, [userLoggedIn, studentName, studentId, studentEmail, studentUsername, unlockedLessons, completedLessons, completedActivities, reviewedNotes]);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    } catch (error) {
+      setAuthError(error instanceof Error ? `Could not save local progress: ${error.message}` : 'Could not save local progress.');
+    }
+
+    if (!authUser || loadedProgressUserId !== authUser.id) return;
+
+    void saveCourseProgress(authUser.id, progress).then(() => {
+      setAuthError('');
+    }).catch((error: unknown) => {
+      setAuthError(error instanceof Error ? `Could not save your course progress: ${error.message}` : 'Could not save your course progress.');
+    });
+  }, [authUser, loadedProgressUserId, unlockedLessons, completedLessons, completedActivities, reviewedNotes]);
 
   // Handle lesson progression: completing a module unlocks the next one!
   const markLessonComplete = (lessonId: string) => {
@@ -175,21 +225,34 @@ export default function App() {
     setCurrentLessonSubView('overview');
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+    } catch (error) {
+      setAuthError(error instanceof Error ? `Could not clear local progress: ${error.message}` : 'Could not clear local progress.');
+    }
   };
 
-  const handleLoginSuccess = (name: string, id: string) => {
-    setUserLoggedIn(true);
-    setStudentName(name);
-    setStudentId(id);
+  const handleLoginSuccess = (user: User) => {
+    setIsGuest(false);
+    setAuthUser(user);
+    setSelectedAccountType(getAccountType(user));
+    setAuthError('');
   };
 
-  const handleLogout = () => {
-    setUserLoggedIn(false);
-    setStudentName('');
-    setStudentId('');
-    setStudentEmail('');
-    setStudentUsername('');
+  const handleLogout = async () => {
+    if (isGuest && !authUser) {
+      setIsGuest(false);
+      setSelectedAccountType('student');
+      setActiveTab('home');
+      return;
+    }
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAuthError(`Could not sign out: ${error.message}`);
+      return;
+    }
+    setAuthUser(null);
+    setSelectedAccountType('student');
+    setActiveTab('home');
   };
 
   return (
@@ -210,16 +273,23 @@ export default function App() {
         studentId={studentId}
       />
 
+      {authError && (
+        <div role="alert" className="mx-auto mt-4 w-[min(90%,48rem)] rounded-xl border border-rose-500/50 bg-rose-950/60 px-4 py-3 text-sm text-rose-200">
+          {authError}
+        </div>
+      )}
+
       {/* Main Tab Screen Content */}
-      <main className="flex-1">
+      <main className={`flex-1 ${authUser && isProgressLoading ? 'pointer-events-none' : ''}`}>
+        {authUser && isProgressLoading && (
+          <div role="status" className="mx-auto mt-6 w-fit rounded-xl border border-cyan-500/30 bg-cyan-950/50 px-4 py-3 text-sm text-cyan-200">
+            Loading your saved course progress...
+          </div>
+        )}
         {activeTab === 'login' && (
           <LoginPage
-            onLoginSuccess={(email, username, name) => {
-              setUserLoggedIn(true);
-              setStudentEmail(email);
-              setStudentUsername(username);
-              setStudentName(name);
-              setStudentId(username);
+            onLoginSuccess={(user) => {
+              handleLoginSuccess(user);
               setActiveTab('lessons');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
@@ -232,9 +302,16 @@ export default function App() {
               email: studentEmail,
               username: studentUsername,
               name: studentName,
+              accountType: selectedAccountType,
+              teacherApproved,
             }}
             onLogout={handleLogout}
             onResetProgress={handleResetProgress}
+            isGuest={isGuest}
+            onContinueAsGuest={() => {
+              setIsGuest(true);
+              setActiveTab('lessons');
+            }}
           />
         )}
 
@@ -315,17 +392,6 @@ export default function App() {
       <CreatorsModal
         isOpen={isCreatorsOpen}
         onClose={() => setIsCreatorsOpen(false)}
-      />
-
-      <LoginModal
-        isOpen={isLoginOpen}
-        onClose={() => setIsLoginOpen(false)}
-        onSuccess={handleLoginSuccess}
-        userLoggedIn={userLoggedIn}
-        onLogout={handleLogout}
-        onResetProgress={handleResetProgress}
-        currentName={studentName}
-        currentId={studentId}
       />
     </div>
   );

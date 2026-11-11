@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ChevronDown, ChevronUp, BookmarkCheck, CheckCircle2, 
   Upload, Download, FileText, Plus, ExternalLink, Trash2, 
   Sparkles, Check, Paperclip, FolderPlus
 } from 'lucide-react';
-import { COURSE_MATERIALS, TeacherMaterial } from '../../materialsConfig';
+import { COURSE_MATERIALS, type TeacherMaterial } from '../../materialsConfig';
+import {
+  deleteTeacherResource,
+  loadTeacherResources,
+  MAX_RESOURCE_FILE_SIZE,
+  supabase,
+  uploadTeacherResource,
+} from '../../lib/supabase';
 
 interface NotesScreenProps {
   reviewedNotes: number[];
@@ -12,6 +19,22 @@ interface NotesScreenProps {
 }
 
 const STORAGE_TEACHER_MATERIALS_KEY = 'recognai_teacher_materials_v1';
+const RESOURCE_CATEGORIES = [
+  'Curriculum Guide',
+  'Lesson Plan',
+  'Worksheet',
+  'Slide Resource',
+  'Rubric',
+] as const;
+const MATERIAL_FILE_TYPES = ['PDF', 'DOCX', 'PPTX', 'LINK'] as const;
+
+function isResourceCategory(value: string): value is TeacherMaterial['category'] {
+  return RESOURCE_CATEGORIES.some((category) => category === value);
+}
+
+function isMaterialFileType(value: string): value is TeacherMaterial['fileType'] {
+  return MATERIAL_FILE_TYPES.some((fileType) => fileType === value);
+}
 
 export const NotesScreen: React.FC<NotesScreenProps> = ({
   reviewedNotes,
@@ -27,6 +50,13 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
     } catch {}
     return COURSE_MATERIALS.teacherMaterials || [];
   });
+  const [cloudMaterials, setCloudMaterials] = useState<TeacherMaterial[]>([]);
+  const [teacherUserId, setTeacherUserId] = useState<string | null>(null);
+  const [isTeacher, setIsTeacher] = useState<boolean>(false);
+  const [isSignedIn, setIsSignedIn] = useState<boolean>(false);
+  const [isLoadingResources, setIsLoadingResources] = useState<boolean>(Boolean(supabase));
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [resourceError, setResourceError] = useState<string>('');
 
   // Modal / form state for uploading/linking a new material
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -35,47 +65,151 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
   const [newDescription, setNewDescription] = useState<string>('');
   const [newDownloadUrl, setNewDownloadUrl] = useState<string>('');
   const [newFileType, setNewFileType] = useState<'PDF' | 'DOCX' | 'PPTX' | 'LINK'>('PDF');
+  const [newFile, setNewFile] = useState<File | null>(null);
   const [newFileSize, setNewFileSize] = useState<string>('1.2 MB');
   const [newBadge, setNewBadge] = useState<string>('TEACHER RESOURCE');
   const [successToast, setSuccessToast] = useState<string>('');
 
-  const handleSaveMaterial = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!supabase) return;
+
+    let active = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setTeacherUserId(session?.user.id ?? null);
+      setIsSignedIn(Boolean(session?.user));
+      setIsTeacher(session?.user.app_metadata.role === 'teacher');
+    });
+
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        setResourceError(`Could not check your teacher permissions: ${error.message}`);
+        return;
+      }
+      setTeacherUserId(data.session?.user.id ?? null);
+      setIsSignedIn(Boolean(data.session?.user));
+      setIsTeacher(data.session?.user.app_metadata.role === 'teacher');
+    }).catch((error: unknown) => {
+      if (active) {
+        setResourceError(error instanceof Error ? error.message : 'Could not check your teacher permissions.');
+      }
+    });
+
+    void loadTeacherResources().then((materials) => {
+      if (active) setCloudMaterials(materials);
+    }).catch((error: unknown) => {
+      if (active) {
+        setResourceError(error instanceof Error ? error.message : 'Could not load shared teacher resources.');
+      }
+    }).finally(() => {
+      if (active) setIsLoadingResources(false);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const canManageResources = Boolean(teacherUserId && isSignedIn && isTeacher);
+
+  const handleSaveMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageResources) {
+      setResourceError('Only signed-in accounts approved with the teacher role can add or upload resources.');
+      return;
+    }
     if (!newTitle.trim()) return;
 
-    const newItem: TeacherMaterial = {
-      id: `custom-mat-${Date.now()}`,
-      title: newTitle.trim(),
-      category: newCategory,
-      description: newDescription.trim() || 'Custom pedagogical resource uploaded for Class IX DTI educators and learners.',
-      downloadUrl: newDownloadUrl.trim(),
-      fileType: newFileType,
-      fileSize: newFileSize.trim() || 'Web Link',
-      badge: newBadge.trim().toUpperCase() || 'RESOURCE HUB',
-      tags: ['Class IX DTI', newCategory],
-    };
+    setResourceError('');
+    if (newFile && newDownloadUrl.trim()) {
+      setResourceError('Choose a device file or enter a resource link, not both.');
+      return;
+    }
 
-    const updated = [newItem, ...customMaterials];
-    setCustomMaterials(updated);
-    try {
-      localStorage.setItem(STORAGE_TEACHER_MATERIALS_KEY, JSON.stringify(updated));
-    } catch {}
+    if (newFile) {
+      if (!teacherUserId || !isTeacher) {
+        setResourceError('Sign in with an account that has been granted the teacher role to upload files.');
+        return;
+      }
 
-    // Reset form
+      setIsUploading(true);
+      try {
+        const newItem = await uploadTeacherResource(newFile, teacherUserId, {
+          title: newTitle,
+          category: newCategory,
+          description: newDescription || 'Classroom resource shared by a teacher.',
+        });
+        setCloudMaterials((previous) => [newItem, ...previous]);
+        setSuccessToast(`"${newItem.title}" uploaded and shared with the class!`);
+      } catch (error) {
+        setResourceError(error instanceof Error ? error.message : 'Could not upload this resource.');
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    } else {
+      const newItem: TeacherMaterial = {
+        id: `custom-mat-${Date.now()}`,
+        title: newTitle.trim(),
+        category: newCategory,
+        description: newDescription.trim() || 'Custom pedagogical resource uploaded for Class IX DTI educators and learners.',
+        downloadUrl: newDownloadUrl.trim(),
+        fileType: newDownloadUrl.trim() ? 'LINK' : newFileType,
+        fileSize: newFileSize.trim() || 'Web Link',
+        badge: newBadge.trim().toUpperCase() || 'RESOURCE HUB',
+        tags: ['Class IX DTI', newCategory],
+      };
+
+      const updated = [newItem, ...customMaterials];
+      try {
+        localStorage.setItem(STORAGE_TEACHER_MATERIALS_KEY, JSON.stringify(updated));
+      } catch (error) {
+        setResourceError(error instanceof Error ? `Could not save this resource in this browser: ${error.message}` : 'Could not save this resource in this browser.');
+        return;
+      }
+      setCustomMaterials(updated);
+
+      setSuccessToast(`"${newItem.title}" added to Teacher Materials!`);
+    }
+
     setNewTitle('');
     setNewDescription('');
     setNewDownloadUrl('');
+    setNewFile(null);
     setIsAddModalOpen(false);
-    setSuccessToast(`"${newItem.title}" added to Teacher Materials!`);
     setTimeout(() => setSuccessToast(''), 3500);
   };
 
-  const handleDeleteMaterial = (id: string) => {
+  const handleDeleteMaterial = async (material: TeacherMaterial) => {
+    setResourceError('');
+    if (!canManageResources) {
+      setResourceError('Only signed-in accounts approved with the teacher role can remove resources.');
+      return;
+    }
+    if (material.storagePath) {
+      if (!teacherUserId) {
+        setResourceError('Sign in with the teacher account that uploaded this file to remove it.');
+        return;
+      }
+      try {
+        await deleteTeacherResource(material.id, material.storagePath, teacherUserId);
+        setCloudMaterials((previous) => previous.filter((item) => item.id !== material.id));
+      } catch (error) {
+        setResourceError(error instanceof Error ? error.message : 'Could not remove this uploaded resource.');
+      }
+      return;
+    }
+
+    const id = material.id;
     const updated = customMaterials.filter((m) => m.id !== id);
     setCustomMaterials(updated);
     try {
       localStorage.setItem(STORAGE_TEACHER_MATERIALS_KEY, JSON.stringify(updated));
-    } catch {}
+    } catch (error) {
+      setResourceError(error instanceof Error ? error.message : 'Could not update saved resources in this browser.');
+    }
   };
 
   const sections = [
@@ -234,7 +368,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
           </h1>
 
           <p className="text-slate-300 text-sm sm:text-base max-w-3xl leading-relaxed">
-            These class notes supplement standard Class IX DTI textbooks. In addition to curriculum study points, teachers and learners can upload and download instructional lesson plans, study guides, handouts, and rubrics below.
+            These class notes supplement standard Class IX DTI textbooks. Teachers can share lesson plans, study guides, handouts, and rubrics below for learners to access.
           </p>
 
           {/* Success toast */}
@@ -242,6 +376,11 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
             <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
               <Check className="w-4 h-4 text-emerald-400" />
               <span>{successToast}</span>
+            </div>
+          )}
+          {resourceError && (
+            <div role="alert" className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/50 text-rose-200 text-xs">
+              {resourceError}
             </div>
           )}
         </div>
@@ -262,23 +401,44 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                 <span>Additional Teacher and Learner Tools</span>
               </h2>
               <p className="text-xs text-slate-300 max-w-2xl">
-                Upload or access classroom resources, lesson plans, rubrics, and activity sheets for educators and students.
+                Access shared resources, or let authorized teachers upload lesson plans, rubrics, and activity sheets from their devices.
               </p>
             </div>
 
             {/* Upload / Add Material Button */}
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_15px_rgba(0,245,196,0.3)] flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer whitespace-nowrap self-start sm:self-auto"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Upload / Add Material</span>
-            </button>
+            <div className="flex flex-col items-start gap-2 self-start sm:items-end sm:self-auto">
+              <button
+                onClick={() => {
+                  if (canManageResources) {
+                    setResourceError('');
+                    setIsAddModalOpen(true);
+                  }
+                }}
+                disabled={!canManageResources}
+                title={canManageResources ? 'Add or upload a course resource' : 'Only approved teacher accounts can add resources'}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_15px_rgba(0,245,196,0.3)] flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 self-start sm:self-auto"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Upload / Add Material</span>
+              </button>
+              {!canManageResources && (
+                <span className="max-w-xs text-[10px] leading-relaxed text-amber-200 sm:text-right">
+                  {isSignedIn
+                    ? 'Adding and uploading materials is restricted to accounts approved with the teacher role.'
+                    : 'Sign in with an administrator-approved teacher account to add or upload materials.'}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Cards Grid for Teacher Materials */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customMaterials.map((mat) => (
+            {isLoadingResources && (
+              <p role="status" className="text-xs text-cyan-200 md:col-span-2 lg:col-span-3">
+                Loading shared teacher resources...
+              </p>
+            )}
+            {[...cloudMaterials, ...customMaterials].map((mat) => (
               <div
                 key={mat.id}
                 className="p-5 rounded-2xl bg-[#080e1b] border border-[#192b4a] hover:border-[#00f5c4]/50 transition-all flex flex-col justify-between space-y-4 group shadow-md"
@@ -314,13 +474,14 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   {mat.downloadUrl ? (
                     <a
                       href={mat.downloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      target={mat.storagePath ? undefined : '_blank'}
+                      rel={mat.storagePath ? undefined : 'noopener noreferrer'}
+                      download={mat.storagePath ? `${mat.title}.${mat.fileType.toLowerCase()}` : undefined}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0d182e] hover:bg-[#16274a] text-[#00f5c4] border border-[#00f5c4]/30 transition-all cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>Download / View</span>
-                      <ExternalLink className="w-3 h-3 opacity-60" />
+                      <span>{mat.storagePath ? 'Download Resource' : 'Open Resource'}</span>
+                      {!mat.storagePath && <ExternalLink className="w-3 h-3 opacity-60" />}
                     </a>
                   ) : (
                     <div className="flex items-center gap-1.5 text-xs text-amber-300/80 font-mono">
@@ -329,13 +490,20 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                     </div>
                   )}
 
-                  <button
-                    onClick={() => handleDeleteMaterial(mat.id)}
-                    title="Remove this material"
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canManageResources && (
+                    !mat.storagePath
+                      ? mat.id.startsWith('custom-mat-')
+                      : mat.uploadedBy === teacherUserId
+                  ) && (
+                    <button
+                      onClick={() => void handleDeleteMaterial(mat)}
+                      title="Remove this material"
+                      aria-label={`Remove ${mat.title}`}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -482,6 +650,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                 <input
                   type="text"
                   required
+                  maxLength={160}
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="e.g. Class IX DTI Chapter 10 Discussion Guide & Case Handout"
@@ -494,7 +663,9 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   <label className="text-slate-300 font-semibold">Resource Category</label>
                   <select
                     value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value as any)}
+                    onChange={(e) => {
+                      if (isResourceCategory(e.target.value)) setNewCategory(e.target.value);
+                    }}
                     className="w-full p-3 rounded-xl bg-[#070b16] border border-[#1b2b48] text-white focus:outline-none focus:border-[#00f5c4]"
                   >
                     <option value="Curriculum Guide">Curriculum Guide</option>
@@ -509,7 +680,9 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   <label className="text-slate-300 font-semibold">File Format</label>
                   <select
                     value={newFileType}
-                    onChange={(e) => setNewFileType(e.target.value as any)}
+                    onChange={(e) => {
+                      if (isMaterialFileType(e.target.value)) setNewFileType(e.target.value);
+                    }}
                     className="w-full p-3 rounded-xl bg-[#070b16] border border-[#1b2b48] text-white focus:outline-none focus:border-[#00f5c4]"
                   >
                     <option value="PDF">PDF Document</option>
@@ -532,16 +705,72 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-slate-300 font-semibold">Download Link / Google Drive / Cloud URL</label>
+                <label htmlFor="teacher-resource-file" className="text-slate-300 font-semibold">
+                  Upload a file from this device
+                </label>
+                <input
+                  id="teacher-resource-file"
+                  type="file"
+                  accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setResourceError('');
+                    if (file && file.size > MAX_RESOURCE_FILE_SIZE) {
+                      setNewFile(null);
+                      setResourceError('Choose a file that is no larger than 20 MB.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setNewFile(file);
+                    if (file) {
+                      setNewDownloadUrl('');
+                      const extension = file.name.split('.').pop()?.toLowerCase();
+                      if (extension === 'pdf' || extension === 'docx' || extension === 'pptx') {
+                        setNewFileType(extension.toUpperCase() as 'PDF' | 'DOCX' | 'PPTX');
+                      }
+                    }
+                  }}
+                  className="w-full p-3 rounded-xl bg-[#070b16] border border-[#1b2b48] text-white file:mr-3 file:rounded-lg file:border-0 file:bg-[#00f5c4] file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#070b16]"
+                />
+                <span className="block text-[10px] text-slate-400">
+                  PDF, DOCX, or PPTX; maximum 20 MB. Uploaded files are shared with the class.
+                </span>
+                {newFile && (
+                  <span className="block break-all text-[10px] text-cyan-200">
+                    Selected: {newFile.name} ({(newFile.size / (1024 * 1024)).toFixed(1)} MB)
+                  </span>
+                )}
+                {!supabase ? (
+                  <span className="block text-[10px] text-amber-200">
+                    Configure Supabase before uploading shared files.
+                  </span>
+                ) : !teacherUserId ? (
+                  <span className="block text-[10px] text-amber-200">
+                    Sign in with an authorized teacher account to upload a shared file.
+                  </span>
+                ) : !isTeacher ? (
+                  <span className="block text-[10px] text-amber-200">
+                    This account does not have the teacher role. Ask your Supabase project administrator to grant it.
+                  </span>
+                ) : (
+                  <span className="block text-[10px] text-emerald-300">
+                    Teacher access confirmed. Your file will be available to all course visitors.
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-300 font-semibold">Or add an external resource link</label>
                 <input
                   type="url"
                   value={newDownloadUrl}
                   onChange={(e) => setNewDownloadUrl(e.target.value)}
+                  disabled={Boolean(newFile)}
                   placeholder="https://drive.google.com/... or https://your-school.edu/handout.pdf"
                   className="w-full p-3 rounded-xl bg-[#070b16] border border-[#1b2b48] text-white focus:outline-none focus:border-[#00f5c4]"
                 />
                 <span className="text-[10px] text-slate-400">
-                  Tip: Paste a Google Drive, OneDrive, or school website link with public view permissions.
+                  Links continue to be saved in this browser; upload a file above to share a resource across devices.
                 </span>
               </div>
 
@@ -555,9 +784,10 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_15px_rgba(0,245,196,0.3)] transition-all cursor-pointer"
+                  disabled={isUploading || (Boolean(newFile) && (!isTeacher || !teacherUserId))}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_15px_rgba(0,245,196,0.3)] transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Save & Publish to Notes Tab
+                  {isUploading ? 'Uploading...' : newFile ? 'Upload & Share with Class' : 'Upload Resource'}
                 </button>
               </div>
             </form>

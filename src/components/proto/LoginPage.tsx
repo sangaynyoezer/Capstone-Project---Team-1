@@ -1,18 +1,24 @@
 import React, { useState } from 'react';
-import { Mail, User, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, Sparkles, AlertCircle, Check, BadgeCheck } from 'lucide-react';
+import { Mail, User, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, AlertCircle, Check, BadgeCheck } from 'lucide-react';
 import { assetUrl } from '../../utils/assetUrl';
+import { supabase } from '../../lib/supabase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface LoginPageProps {
-  onLoginSuccess: (email: string, username: string, name: string) => void;
+  onLoginSuccess: (user: SupabaseUser) => void;
   onBackToCourse: () => void;
   userLoggedIn: boolean;
   currentUser: {
     email: string;
     username: string;
     name: string;
+    accountType: 'student' | 'teacher';
+    teacherApproved: boolean;
   };
   onLogout: () => void;
   onResetProgress: () => void;
+  isGuest: boolean;
+  onContinueAsGuest: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
@@ -22,14 +28,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   currentUser,
   onLogout,
   onResetProgress,
+  isGuest,
+  onContinueAsGuest,
 }) => {
   const [isRegisterMode, setIsRegisterMode] = useState<boolean>(false);
+  const [accountType, setAccountType] = useState<'student' | 'teacher'>('student');
   
   // Fields for Sign In
   const [identifier, setIdentifier] = useState<string>(''); // Email, Student ID, or Username
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [rememberMe, setRememberMe] = useState<boolean>(true);
 
   // Additional Fields for Register
   const [fullName, setFullName] = useState<string>('');
@@ -46,54 +54,44 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
   };
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrorMessage('');
     setFormSuccessMessage('');
 
-    const trimmedId = identifier.trim();
-    const trimmedPass = password.trim();
+    const email = identifier.trim();
 
-    if (!trimmedId) {
-      setFormErrorMessage('Please enter your email, username, or student ID.');
+    if (!isValidEmail(email)) {
+      setFormErrorMessage('Please enter a valid email address.');
       return;
     }
 
-    if (!trimmedPass) {
+    if (!password) {
       setFormErrorMessage('Please enter your password.');
       return;
     }
 
-    if (trimmedPass.length < 3) {
-      setFormErrorMessage('Password must be at least 3 characters long.');
+    if (!supabase) {
+      setFormErrorMessage('Database authentication is not configured. Add the Supabase settings to your environment and try again.');
       return;
     }
 
     setIsSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data.user) throw new Error('Sign-in succeeded without returning a user account.');
 
-    // Determine email and username from identifier
-    let derivedEmail = trimmedId;
-    let derivedUsername = trimmedId.split('@')[0];
-    let derivedName = trimmedId.split('@')[0];
-
-    // Format display name nicely
-    derivedName = derivedName
-      .replace(/[._-]/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
-
-    if (!derivedEmail.includes('@')) {
-      derivedEmail = `${trimmedId.toLowerCase()}@rub.edu.bt`;
-    }
-
-    setFormSuccessMessage('Authentication successful! Loading course...');
-
-    setTimeout(() => {
+      setFormSuccessMessage('Authentication successful! Loading course...');
+      onLoginSuccess(data.user);
+    } catch (error) {
+      setFormErrorMessage(error instanceof Error ? error.message : 'Sign-in failed. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      onLoginSuccess(derivedEmail, derivedUsername, derivedName);
-    }, 400);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrorMessage('');
     setFormSuccessMessage('');
@@ -101,7 +99,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     const trimmedName = fullName.trim();
     const trimmedEmail = registerEmail.trim();
     const trimmedUser = registerUsername.trim();
-    const trimmedPass = password.trim();
+    const newPassword = password;
 
     if (!trimmedName) {
       setFormErrorMessage('Please enter your full name.');
@@ -113,8 +111,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      setFormErrorMessage('Please enter a valid email address containing "@" and domain (e.g. 08230188.sce@rub.edu.bt).');
+    if (!isValidEmail(trimmedEmail)) {
+      setFormErrorMessage('Please enter a valid email address.');
       return;
     }
 
@@ -123,31 +121,45 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    if (!trimmedPass || trimmedPass.length < 3) {
-      setFormErrorMessage('Please create a password of at least 3 characters.');
+    if (newPassword.length < 8) {
+      setFormErrorMessage('Please create a password with at least 8 characters.');
+      return;
+    }
+
+    if (!supabase) {
+      setFormErrorMessage('Database authentication is not configured. Add the Supabase settings to your environment and try again.');
       return;
     }
 
     setIsSubmitting(true);
-    setFormSuccessMessage('Account registered successfully! Redirecting...');
+    try {
+      const redirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password: newPassword,
+        options: {
+          data: {
+            full_name: trimmedName,
+            username: trimmedUser,
+            student_id: trimmedUser,
+            account_type: accountType,
+          },
+          emailRedirectTo: redirectTo,
+        },
+      });
+      if (error) throw error;
 
-    setTimeout(() => {
+      if (data.session && data.user) {
+        setFormSuccessMessage('Account registered successfully! Loading course...');
+        onLoginSuccess(data.user);
+      } else {
+        setFormSuccessMessage('Account created. Check your email to confirm your address, then sign in.');
+      }
+    } catch (error) {
+      setFormErrorMessage(error instanceof Error ? error.message : 'Registration failed. Please try again.');
+    } finally {
       setIsSubmitting(false);
-      onLoginSuccess(trimmedEmail, trimmedUser, trimmedName);
-    }, 400);
-  };
-
-  const handleSimulateQuickFill = () => {
-    if (isRegisterMode) {
-      setFullName('Sangay Namling Yoezer');
-      setRegisterEmail('08230188.sce@rub.edu.bt');
-      setRegisterUsername('08230188');
-      setPassword('class9dti');
-    } else {
-      setIdentifier('08230188.sce@rub.edu.bt');
-      setPassword('class9dti');
     }
-    setFormErrorMessage('');
   };
 
   return (
@@ -194,10 +206,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
           <p className="text-xs text-slate-400 max-w-xs mx-auto">
             {userLoggedIn
-              ? 'Your student account is active. Manage your profile or resume studying.'
+              ? isGuest
+                ? 'You are exploring as a guest. Your progress stays in this browser.'
+                : 'Your student account is active. Manage your profile or resume studying.'
               : isRegisterMode
               ? 'Register a new student account to save your Chapter 10 progress.'
-              : 'Sign in with your email or student ID to access your course lessons.'}
+              : 'Sign in with your email to access and sync your course progress.'}
           </p>
         </div>
 
@@ -208,13 +222,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="flex items-center justify-between pb-2 border-b border-[#142036]">
                 <span className="text-slate-400">Account Status:</span>
                 <span className="text-emerald-400 font-semibold flex items-center gap-1.5 font-mono">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Authenticated
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {isGuest ? 'Guest mode' : 'Authenticated'}
                 </span>
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Email:</span>
-                <span className="text-white font-mono">{currentUser.email || 'student@rub.edu.bt'}</span>
+                <span className="text-white font-mono">{currentUser.email || (isGuest ? 'Not signed in' : 'student@rub.edu.bt')}</span>
               </div>
 
               <div className="flex justify-between items-center">
@@ -226,6 +240,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <span className="text-slate-400">Student Name:</span>
                 <span className="text-white font-medium">{currentUser.name || 'Student'}</span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Account Type:</span>
+                <span className="text-white font-medium">
+                  {currentUser.teacherApproved
+                    ? 'Teacher (approved)'
+                    : currentUser.accountType === 'teacher'
+                      ? 'Teacher (approval required)'
+                      : 'Student'}
+                </span>
+              </div>
+              {currentUser.accountType === 'teacher' && !currentUser.teacherApproved && (
+                <p className="border-t border-[#142036] pt-2 text-amber-200">
+                  Teacher access needs approval from the project administrator. Until then, this account has student access.
+                </p>
+              )}
+              {isGuest && (
+                <p className="border-t border-[#142036] pt-2 text-amber-200">
+                  Guest progress is saved only in this browser and is not synced to Supabase.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2.5">
@@ -251,10 +285,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 Sign Out
               </button>
             </div>
+
           </div>
         ) : (
           /* Login / Registration Form with Live Error Handling */
           <div className="space-y-4">
+            {!supabase && (
+              <div role="alert" className="p-3 rounded-xl bg-amber-950/50 border border-amber-500/50 text-amber-200 text-xs">
+                Supabase is not configured yet. Add the project URL and anon key to your environment before signing in.
+              </div>
+            )}
+
             {/* Mode Selector Tab (Sign In vs Register) */}
             <div className="flex bg-[#070c17] p-1 rounded-xl border border-[#1b2b48] text-xs font-semibold">
               <button
@@ -289,6 +330,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </button>
             </div>
 
+            {isRegisterMode && (
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-semibold text-slate-300">
+                  I am registering as a
+                </legend>
+                <div className="flex gap-2 rounded-xl border border-[#1b2b48] bg-[#070c17] p-1">
+                  {(['student', 'teacher'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={accountType === type}
+                      onClick={() => setAccountType(type)}
+                      className={`flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition-colors ${
+                        accountType === type
+                          ? 'bg-[#00f5c4] text-[#070b16]'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] leading-relaxed text-slate-400">
+                  Teacher selection requests teacher access; a project administrator must approve it before uploads are enabled.
+                </p>
+              </fieldset>
+            )}
+
             {/* Global Error Alert Banner */}
             {formErrorMessage && (
               <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-500/60 text-rose-200 text-xs flex items-start gap-2 animate-in fade-in">
@@ -308,22 +377,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             {!isRegisterMode ? (
               /* ----------------- SIGN IN FORM ----------------- */
               <form noValidate onSubmit={handleSignIn} className="space-y-4">
-                {/* Email or Username or Student ID */}
+                {/* Email */}
                 <div className="space-y-1.5 text-xs">
                   <label className="text-slate-300 font-semibold flex items-center gap-2">
                     <User className="w-3.5 h-3.5 text-[#00f5c4]" />
-                    <span>Email, Student ID, or Username</span>
+                    <span>Email Address</span>
                   </label>
 
                   <div className="relative">
                     <input
-                      type="text"
+                      type="email"
                       value={identifier}
+                      autoComplete="email"
                       onChange={(e) => {
                         setIdentifier(e.target.value);
                         setFormErrorMessage('');
                       }}
-                      placeholder="e.g. 08230188.sce@rub.edu.bt or sangay"
+                      placeholder="e.g. student@school.edu"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#070c17] border border-[#1b2b48] text-white placeholder-slate-500 text-xs focus:outline-none focus:border-[#00f5c4] transition-all"
                     />
                   </div>
@@ -340,6 +410,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
+                      autoComplete="current-password"
                       onChange={(e) => {
                         setPassword(e.target.value);
                         setFormErrorMessage('');
@@ -358,27 +429,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   </div>
                 </div>
 
-                {/* Remember me & Demo quick fill */}
-                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-[#00f5c4] focus:ring-0"
-                    />
-                    <span>Remember me</span>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={handleSimulateQuickFill}
-                    className="text-[11px] text-[#00f5c4] hover:underline flex items-center gap-1 font-mono cursor-pointer"
-                    title="Fill sample student credentials"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Autofill Sample</span>
-                  </button>
+                <div className="text-xs text-slate-400 pt-1">
+                  Your secure sign-in session will be remembered on this device.
                 </div>
 
                 {/* Submit Button */}
@@ -458,11 +510,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
+                      autoComplete="new-password"
                       onChange={(e) => {
                         setPassword(e.target.value);
                         setFormErrorMessage('');
                       }}
-                      placeholder="At least 3 characters"
+                      placeholder="At least 8 characters"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#070c17] border border-[#1b2b48] text-white placeholder-slate-500 text-xs focus:outline-none focus:border-[#00f5c4] transition-all pr-10"
                     />
                     <button
@@ -474,18 +527,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                </div>
-
-                {/* Autofill sample button */}
-                <div className="flex justify-end text-xs">
-                  <button
-                    type="button"
-                    onClick={handleSimulateQuickFill}
-                    className="text-[11px] text-[#00f5c4] hover:underline flex items-center gap-1 font-mono cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Autofill Sample</span>
-                  </button>
                 </div>
 
                 {/* Register Submit Button */}
@@ -500,11 +541,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </form>
             )}
 
-            {/* Guest Option */}
             <div className="text-center pt-2">
               <button
                 type="button"
-                onClick={() => onLoginSuccess('guest.learner@rub.edu.bt', 'guest_learner', 'Guest Learner')}
+                onClick={onContinueAsGuest}
                 className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 Continue exploring as Guest →
@@ -517,7 +557,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       {/* Security badge at bottom */}
       <div className="mt-6 flex items-center gap-2 text-xs font-mono text-slate-500 z-10">
         <ShieldCheck className="w-4 h-4 text-emerald-400" />
-        <span>End-to-end encrypted biometric lab environment</span>
+        <span>{supabase ? 'Supabase authentication enabled' : 'Guest learning available'}</span>
       </div>
     </div>
   );
