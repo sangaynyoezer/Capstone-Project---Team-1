@@ -35,6 +35,7 @@ export default function App() {
 
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [guestTutorId, setGuestTutorId] = useState<string | null>(null);
   const [selectedAccountType, setSelectedAccountType] = useState<'student' | 'teacher'>('student');
   const [authError, setAuthError] = useState<string>('');
   const [loadedProgressUserId, setLoadedProgressUserId] = useState<string | null>(null);
@@ -44,6 +45,11 @@ export default function App() {
   const studentName = typeof userMetadata.full_name === 'string'
     ? userMetadata.full_name
     : isGuest ? 'Guest Learner' : '';
+  const tutorName = studentName ||
+    (typeof userMetadata.name === 'string' ? userMetadata.name : '') ||
+    (typeof userMetadata.username === 'string' ? userMetadata.username : '') ||
+    authUser?.email?.split('@')[0] ||
+    'there';
   const studentEmail = authUser?.email ?? '';
   const studentUsername = typeof userMetadata.username === 'string'
     ? userMetadata.username
@@ -232,6 +238,7 @@ export default function App() {
 
   const handleLoginSuccess = (user: User) => {
     setIsGuest(false);
+    setGuestTutorId(null);
     setAuthUser(user);
     setSelectedAccountType(getAccountType(user));
     setAuthError('');
@@ -240,6 +247,7 @@ export default function App() {
   const handleLogout = async () => {
     if (isGuest && !authUser) {
       setIsGuest(false);
+      setGuestTutorId(null);
       setSelectedAccountType('student');
       setActiveTab('home');
       return;
@@ -310,6 +318,7 @@ export default function App() {
             isGuest={isGuest}
             onContinueAsGuest={() => {
               setIsGuest(true);
+              setGuestTutorId(window.crypto.randomUUID());
               setActiveTab('lessons');
             }}
           />
@@ -365,7 +374,14 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'tutor' && <AITutorScreen />}
+        {activeTab === 'tutor' && (
+          <AITutorScreen
+            key={authUser?.id ?? (isGuest ? guestTutorId ?? 'guest' : 'visitor')}
+            studentId={authUser?.id ?? (isGuest ? guestTutorId : null)}
+            studentName={tutorName}
+            canUseGemini={Boolean(authUser && supabase)}
+          />
+        )}
 
         {activeTab === 'assessment' && (
           <AssessmentScreen

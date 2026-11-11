@@ -131,3 +131,47 @@ create policy "Teachers can delete their own course resource files"
     and (select auth.uid())::text = (storage.foldername(name))[1]
     and (auth.jwt() -> 'app_metadata' ->> 'role') = 'teacher'
   );
+
+create table if not exists public.ai_tutor_daily_usage (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  usage_date date not null default current_date,
+  request_count integer not null default 0 check (request_count between 0 and 40),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.ai_tutor_daily_usage enable row level security;
+revoke all on public.ai_tutor_daily_usage from anon, authenticated;
+
+create or replace function public.consume_ai_tutor_request()
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := (select auth.uid());
+  request_allowed boolean;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication is required to use the AI tutor.';
+  end if;
+
+  insert into public.ai_tutor_daily_usage (user_id, usage_date, request_count, updated_at)
+  values (current_user_id, current_date, 1, now())
+  on conflict (user_id) do update
+  set usage_date = current_date,
+      request_count = case
+        when public.ai_tutor_daily_usage.usage_date < current_date then 1
+        else public.ai_tutor_daily_usage.request_count + 1
+      end,
+      updated_at = now()
+  where public.ai_tutor_daily_usage.usage_date < current_date
+     or public.ai_tutor_daily_usage.request_count < 40
+  returning true into request_allowed;
+
+  return coalesce(request_allowed, false);
+end;
+$$;
+
+revoke all on function public.consume_ai_tutor_request() from public, anon;
+grant execute on function public.consume_ai_tutor_request() to authenticated;

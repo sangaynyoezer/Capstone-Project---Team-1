@@ -8,6 +8,16 @@ export interface CourseProgress {
   reviewedNotes: number[];
 }
 
+export interface TutorChatTurn {
+  role: 'user' | 'bot';
+  content: string;
+}
+
+export interface TutorReply {
+  reply: string;
+  source: string;
+}
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 const isValidSupabaseUrl = (() => {
@@ -31,6 +41,38 @@ const hasPlaceholderConfig =
 export const supabase = hasPlaceholderConfig
   ? null
   : createClient(supabaseUrl, supabaseAnonKey);
+
+export async function askStudyBuddy(
+  message: string,
+  history: TutorChatTurn[],
+): Promise<TutorReply> {
+  if (!supabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { data, error } = await supabase.functions.invoke<TutorReply>('study-buddy', {
+    body: { message, history },
+  });
+  if (error) {
+    let message = error.message;
+    if ('context' in error && error.context instanceof Response) {
+      const payload: unknown = await error.context.clone().json().catch(() => null);
+      if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        'error' in payload &&
+        typeof payload.error === 'string'
+      ) {
+        message = payload.error;
+      }
+    }
+    throw new Error(message);
+  }
+  if (!data || typeof data.reply !== 'string' || typeof data.source !== 'string') {
+    throw new Error('The AI tutor returned an invalid response.');
+  }
+  return data;
+}
 
 export const MAX_RESOURCE_FILE_SIZE = 20 * 1024 * 1024;
 const RESOURCE_BUCKET = 'course-resources';
