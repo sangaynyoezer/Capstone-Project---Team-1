@@ -12,31 +12,10 @@ export const LessonsRoadmapView: React.FC<LessonsRoadmapViewProps> = ({
   unlockedLessons,
   completedLessons,
 }) => {
-  const curriculumGoals = [
-    {
-      title: 'Define AI Recognition Systems',
-      desc: 'Formulate baseline criteria distinguishing automatic algorithmic classification from manual rule-based inputs (Subtopic 1).',
-    },
-    {
-      title: 'Understand the Recognition Cycle',
-      desc: 'Map how data starts as sensory/raw input, transforms through processor nodes, and resolves as classified output (Subtopic 2).',
-    },
-    {
-      title: 'Examine Key Biometric Types',
-      desc: 'Identify facial, soundwave, fingerprint, and text pattern structures (Subtopic 3).',
-    },
-    {
-      title: 'Trace Real-World Deployments',
-      desc: 'Audit high-stakes industrial use cases including smartphone gateways, airport terminals, and automated bank vaults (Subtopic 4).',
-    },
-    {
-      title: 'Analyze Core System Benefits',
-      desc: 'Examine 24/7 consistency, biometric accuracy, high-speed throughput, and fraud detection (Subtopic 5).',
-    },
-    {
-      title: 'Map Limitations & Ethical Dilemmas',
-      desc: 'Investigate lighting/noise errors, algorithmic bias, biometric privacy risks, capital costs, and overdependence (Subtopic 6).',
-    },
+  const lessonObjectives = [
+    'Explain how recognition systems such as image, speech, and biometric recognition work in automated data capture.',
+    'Describe real-world applications of AI recognition systems.',
+    'Analyse the benefits and limitations of using recognition technologies for automated data capture.',
   ];
 
   const roadmapSteps = [
@@ -94,33 +73,25 @@ export const LessonsRoadmapView: React.FC<LessonsRoadmapViewProps> = ({
         </p>
       </div>
 
-      {/* Main Grid: Curriculum Goals (Left) vs Visual Roadmap (Right) */}
+      {/* Main Grid: Lesson Objectives (Left) vs Visual Roadmap (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
         {/* Left: What You Will Learn */}
         <div className="lg:col-span-7 space-y-6">
           <div className="space-y-1">
-            <span className="text-xs font-mono font-bold tracking-widest text-[#00f5c4] uppercase">
-              CURRICULUM GOALS
-            </span>
             <h2 className="text-2xl sm:text-3xl font-bold text-white">
-              What You Will Learn
+              Lesson Objectives
             </h2>
           </div>
 
           <div className="space-y-5 pt-2">
-            {curriculumGoals.map((goal, idx) => (
+            {lessonObjectives.map((objective, idx) => (
               <div key={idx} className="flex items-start gap-4 group">
                 <div className="mt-1 flex-shrink-0 text-[#00f5c4]">
                   <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-base font-bold text-white group-hover:text-[#00f5c4] transition-colors">
-                    {goal.title}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                    {goal.desc}
-                  </p>
-                </div>
+                <p className="text-sm sm:text-base text-slate-300 leading-relaxed group-hover:text-white transition-colors">
+                  {objective}
+                </p>
               </div>
             ))}
           </div>

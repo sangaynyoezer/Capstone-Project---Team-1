@@ -5,8 +5,9 @@ import {
 } from 'lucide-react';
 import { COURSE_MATERIALS } from '../../../materialsConfig';
 import { formatVideoEmbedUrl } from '../../../utils/mediaUtils';
+import { useVideoCheckpointProgress } from '../../../hooks/useVideoCheckpointProgress';
 import { VideoCheckpointQuiz } from './VideoCheckpointQuiz';
-import { LESSON2_VIDEO_QUIZ } from './videoQuizData';
+import { getVideoQuizPassingScore, LESSON2_VIDEO_QUIZ } from './videoQuizData';
 
 interface Lesson2ViewProps {
   onNextLesson: () => void;
@@ -19,9 +20,25 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
   const [activeStage, setActiveStage] = useState<number>(1);
   const [isPlayingVideo, setIsPlayingVideo] = useState<boolean>(false);
   // USER REQUIREMENT: Students can't move to next lesson without completing the whole video and video quiz
-  const [hasWatchedVideo, setHasWatchedVideo] = useState<boolean>(false);
-  const [isQuizCompleted, setIsQuizCompleted] = useState<boolean>(false);
+  const [checkpointProgress, setCheckpointProgress] = useVideoCheckpointProgress(2);
+  const { hasWatchedVideo, isQuizCompleted, reviewRequired, lastScore, lastTotal } = checkpointProgress;
   const [expandedAccordion, setExpandedAccordion] = useState<number>(1);
+
+  const markVideoWatched = () => {
+    setCheckpointProgress((prev) => ({ ...prev, hasWatchedVideo: true }));
+  };
+
+  const handleQuizComplete = (score: number, total: number) => {
+    const passed = total > 0 && score >= getVideoQuizPassingScore(total);
+    setCheckpointProgress((prev) => ({
+      ...prev,
+      hasWatchedVideo: passed,
+      isQuizCompleted: passed,
+      reviewRequired: !passed,
+      lastScore: score,
+      lastTotal: total,
+    }));
+  };
 
   const stages = [
     {
@@ -226,8 +243,7 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
                     src={formatVideoEmbedUrl(videoData.embedUrl).src}
                     controls
                     className="w-full h-full object-contain"
-                    onPlay={() => setHasWatchedVideo(true)}
-                    onEnded={() => setHasWatchedVideo(true)}
+                    onEnded={markVideoWatched}
                   />
                 ) : (
                   <iframe
@@ -235,7 +251,6 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
                     title={videoData.title}
                     className="w-full h-full"
                     allowFullScreen
-                    onLoad={() => setHasWatchedVideo(true)}
                   />
                 )}
               </div>
@@ -254,7 +269,7 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
                 <button
                   onClick={() => {
                     setIsPlayingVideo(!isPlayingVideo);
-                    setHasWatchedVideo(true);
+                    markVideoWatched();
                   }}
                   className="relative z-10 w-16 h-16 rounded-full bg-[#00f5c4] text-[#070b16] flex items-center justify-center shadow-[0_0_25px_#00f5c4] group-hover:scale-110 transition-transform active:scale-95 cursor-pointer"
                   aria-label="Play Video"
@@ -287,7 +302,7 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
 
             {/* Video Activity Completion Tracker */}
             <div 
-              onClick={() => setHasWatchedVideo(!hasWatchedVideo)}
+              onClick={markVideoWatched}
               className={`p-3.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between gap-3 transition-all ${
                 hasWatchedVideo
                   ? 'bg-emerald-500/10 border-emerald-400 text-white shadow-[0_0_12px_rgba(16,185,129,0.2)]'
@@ -336,9 +351,11 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
             Subtopic 2 Comprehension: AI Recognition Cycle
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            {hasWatchedVideo 
-              ? 'Answer all 10 questions (MCQ, Concept Matching, and Fill in the Blanks) based on the video to unlock Lesson 3.'
-              : 'Please watch the video above first to activate this 10-question checkpoint quiz.'}
+            {hasWatchedVideo
+              ? 'Answer all 10 questions. You need at least 40% to unlock Lesson 3.'
+              : reviewRequired
+                ? `Your last score was ${lastScore ?? 0} of ${lastTotal ?? LESSON2_VIDEO_QUIZ.length}. Rewatch the video, then retake the quiz.`
+                : 'Please watch the video above first to activate this 10-question checkpoint quiz.'}
           </p>
         </div>
 
@@ -348,24 +365,27 @@ export const Lesson2View: React.FC<Lesson2ViewProps> = ({
             subtopicNumber={2}
             questions={LESSON2_VIDEO_QUIZ}
             isAlreadyCompleted={isQuizCompleted}
-            onComplete={() => {
-              setIsQuizCompleted(true);
-            }}
+            completedScore={lastScore ?? undefined}
+            onComplete={handleQuizComplete}
           />
         ) : (
           <div className="p-8 rounded-3xl bg-[#090f1d] border border-dashed border-[#1e2f4e] text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
               <Lock className="w-6 h-6 text-amber-400" />
             </div>
-            <h4 className="text-base font-bold text-white">Quiz Locked Until Video is Completed</h4>
+            <h4 className="text-base font-bold text-white">
+              {reviewRequired ? 'Review the Video Before Retrying' : 'Quiz Locked Until Video is Completed'}
+            </h4>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Watch the "AI Recognition Cycle" video above to unlock the 10-question checkpoint quiz.
+              {reviewRequired
+                ? `Your score was ${lastScore ?? 0} of ${lastTotal ?? LESSON2_VIDEO_QUIZ.length}. You need at least 40% to pass. Rewatch the "AI Recognition Cycle" video before retrying.`
+                : 'Watch the "AI Recognition Cycle" video above to unlock the 10-question checkpoint quiz.'}
             </p>
             <button
-              onClick={() => setHasWatchedVideo(true)}
+              onClick={markVideoWatched}
               className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] cursor-pointer shadow-md"
             >
-              I Have Watched the Video: Start Quiz
+              {reviewRequired ? 'I Have Rewatched the Video: Retry Quiz' : 'I Have Watched the Video: Start Quiz'}
             </button>
           </div>
         )}

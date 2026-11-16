@@ -3,7 +3,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, Award, ArrowRight, RotateCcw, 
   HelpCircle, Check, Sparkles, Layers, ListOrdered
 } from 'lucide-react';
-import { VideoQuizQuestion } from './videoQuizData';
+import { getVideoQuizPassingScore, VideoQuizQuestion } from './videoQuizData';
 
 interface VideoCheckpointQuizProps {
   quizTitle: string;
@@ -11,6 +11,7 @@ interface VideoCheckpointQuizProps {
   questions: VideoQuizQuestion[];
   onComplete: (score: number, total: number) => void;
   isAlreadyCompleted?: boolean;
+  completedScore?: number;
 }
 
 export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
@@ -19,6 +20,7 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
   questions,
   onComplete,
   isAlreadyCompleted = false,
+  completedScore,
 }) => {
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [selectedMcqOption, setSelectedMcqOption] = useState<number | null>(null);
@@ -35,7 +37,10 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
 
   const currentQ = questions[currentIdx];
   const totalQuestions = questions.length;
-  const score = Object.values(answeredResults).filter(Boolean).length;
+  const answeredScore = Object.values(answeredResults).filter(Boolean).length;
+  const score = isAlreadyCompleted ? completedScore ?? answeredScore : answeredScore;
+  const passingScore = getVideoQuizPassingScore(totalQuestions);
+  const hasPassedQuiz = totalQuestions > 0 && score >= passingScore;
 
   // Handle MCQ or Fill-in-the-blank option click
   const handleSelectOption = (idx: number) => {
@@ -98,8 +103,7 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
       setIsAnswerCorrect(false);
     } else {
       setIsFinished(true);
-      const finalScore = score + (isAnswerCorrect ? 1 : 0);
-      onComplete(finalScore, totalQuestions);
+      onComplete(score, totalQuestions);
     }
   };
 
@@ -157,27 +161,37 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
       {/* Finished Summary View */}
       {isFinished ? (
         <div className="py-6 text-center space-y-5 animate-in fade-in duration-300">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/15 border-2 border-emerald-400/50 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_25px_rgba(16,185,129,0.25)]">
-            <Award className="w-8 h-8" />
+          <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center mx-auto ${
+            hasPassedQuiz
+              ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.25)]'
+              : 'bg-amber-500/15 border-amber-400/50 text-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)]'
+          }`}>
+            {hasPassedQuiz ? <Award className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
           </div>
 
           <div className="space-y-1">
-            <span className="text-xs font-mono text-[#00f5c4] uppercase tracking-wider font-bold">
-              CHECKPOINT CLEARED
+            <span className={`text-xs font-mono uppercase tracking-wider font-bold ${
+              hasPassedQuiz ? 'text-[#00f5c4]' : 'text-amber-400'
+            }`}>
+              {hasPassedQuiz ? 'CHECKPOINT CLEARED' : 'VIDEO REVIEW REQUIRED'}
             </span>
             <h4 className="text-2xl font-extrabold text-white">
-              Video Understanding Verified!
+              {hasPassedQuiz ? 'Video Understanding Verified!' : 'Review the Video and Try Again'}
             </h4>
             <p className="text-xs sm:text-sm text-slate-300 max-w-lg mx-auto">
-              You answered all 10 video questions. Your score: <strong className="text-emerald-400">{score} of {totalQuestions}</strong> ({Math.round((score / totalQuestions) * 100)}%).
-              The next lesson has been unlocked below!
+              Your score: <strong className={hasPassedQuiz ? 'text-emerald-400' : 'text-amber-400'}>{score} of {totalQuestions}</strong> ({Math.round((score / totalQuestions) * 100)}%).
+              {hasPassedQuiz
+                ? ' The next lesson has been unlocked below!'
+                : ` You need at least ${passingScore} correct (${Math.round((passingScore / totalQuestions) * 100)}%) to continue. Rewatch the video before retrying.`}
             </p>
           </div>
 
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Activity Completed • Proceed Button Unlocked Below</span>
-          </div>
+          {hasPassedQuiz && (
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Activity Completed • Proceed Button Unlocked Below</span>
+            </div>
+          )}
         </div>
       ) : (
         /* Question Card */

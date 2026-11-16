@@ -29,6 +29,10 @@ export interface VideoQuizQuestion {
 // -------------------------------------------------------------------------------------------------
 // 1. LESSON 2 VIDEO QUIZ: "AI Recognition Cycle" (YouTube: https://youtu.be/PUE9JxUIaC0)
 // -------------------------------------------------------------------------------------------------
+export function getVideoQuizPassingScore(totalQuestions: number): number {
+  return Math.ceil(totalQuestions * 0.4);
+}
+
 export const LESSON2_VIDEO_QUIZ: VideoQuizQuestion[] = [
   {
     id: 1,
