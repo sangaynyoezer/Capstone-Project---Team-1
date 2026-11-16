@@ -20,10 +20,7 @@ import type { User } from '@supabase/supabase-js';
 const STORAGE_KEY = 'recognai_course_v1_progress';
 
 function getAccountType(user: User | null): 'student' | 'teacher' {
-  return user?.app_metadata.role === 'teacher' ||
-    user?.user_metadata.account_type === 'teacher'
-    ? 'teacher'
-    : 'student';
+  return user?.app_metadata.role === 'teacher' ? 'teacher' : 'student';
 }
 
 export default function App() {
@@ -57,8 +54,6 @@ export default function App() {
   const studentId = typeof userMetadata.student_id === 'string'
     ? userMetadata.student_id
     : isGuest ? 'guest' : studentUsername;
-  const teacherApproved = authUser?.app_metadata.role === 'teacher';
-
   // Real course progress state: for first-time login, only Lesson 1 is unlocked, 0 completed!
   const [unlockedLessons, setUnlockedLessons] = useState<string[]>(() => {
     try {
@@ -311,7 +306,6 @@ export default function App() {
               username: studentUsername,
               name: studentName,
               accountType: selectedAccountType,
-              teacherApproved,
             }}
             onLogout={handleLogout}
             onResetProgress={handleResetProgress}

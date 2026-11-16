@@ -117,7 +117,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
   const handleSaveMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageResources) {
-      setResourceError('Only signed-in accounts approved with the teacher role can add or upload resources.');
+      setResourceError('Only signed-in teacher accounts can add or upload resources.');
       return;
     }
     if (!newTitle.trim()) return;
@@ -130,7 +130,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
 
     if (newFile) {
       if (!teacherUserId || !isTeacher) {
-        setResourceError('Sign in with an account that has been granted the teacher role to upload files.');
+        setResourceError('Sign in with a teacher account to upload files.');
         return;
       }
 
@@ -185,7 +185,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
   const handleDeleteMaterial = async (material: TeacherMaterial) => {
     setResourceError('');
     if (!canManageResources) {
-      setResourceError('Only signed-in accounts approved with the teacher role can remove resources.');
+      setResourceError('Only signed-in teacher accounts can remove resources.');
       return;
     }
     if (material.storagePath) {
@@ -415,7 +415,7 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   }
                 }}
                 disabled={!canManageResources}
-                title={canManageResources ? 'Add or upload a course resource' : 'Only approved teacher accounts can add resources'}
+                title={canManageResources ? 'Add or upload a course resource' : 'Only teacher accounts can add resources'}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#00f5c4] text-[#070b16] hover:bg-[#00e0b3] shadow-[0_0_15px_rgba(0,245,196,0.3)] flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 self-start sm:self-auto"
               >
                 <Plus className="w-4 h-4" />
@@ -424,8 +424,8 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
               {!canManageResources && (
                 <span className="max-w-xs text-[10px] leading-relaxed text-amber-200 sm:text-right">
                   {isSignedIn
-                    ? 'Adding and uploading materials is restricted to accounts approved with the teacher role.'
-                    : 'Sign in with an administrator-approved teacher account to add or upload materials.'}
+                    ? 'Adding and uploading materials is restricted to teacher accounts.'
+                    : 'Sign in with a teacher account to add or upload materials.'}
                 </span>
               )}
             </div>
@@ -746,11 +746,11 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
                   </span>
                 ) : !teacherUserId ? (
                   <span className="block text-[10px] text-amber-200">
-                    Sign in with an authorized teacher account to upload a shared file.
+                    Sign in with a teacher account to upload a shared file.
                   </span>
                 ) : !isTeacher ? (
                   <span className="block text-[10px] text-amber-200">
-                    This account does not have the teacher role. Ask your Supabase project administrator to grant it.
+                    This account does not have the teacher role. If you registered as a teacher, run the updated schema and sign in again.
                   </span>
                 ) : (
                   <span className="block text-[10px] text-emerald-300">

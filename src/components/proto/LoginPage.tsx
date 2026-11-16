@@ -13,7 +13,6 @@ interface LoginPageProps {
     username: string;
     name: string;
     accountType: 'student' | 'teacher';
-    teacherApproved: boolean;
   };
   onLogout: () => void;
   onResetProgress: () => void;
@@ -243,18 +242,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Account Type:</span>
                 <span className="text-white font-medium">
-                  {currentUser.teacherApproved
-                    ? 'Teacher (approved)'
-                    : currentUser.accountType === 'teacher'
-                      ? 'Teacher (approval required)'
-                      : 'Student'}
+                  {currentUser.accountType === 'teacher' ? 'Teacher' : 'Student'}
                 </span>
               </div>
-              {currentUser.accountType === 'teacher' && !currentUser.teacherApproved && (
-                <p className="border-t border-[#142036] pt-2 text-amber-200">
-                  Teacher access needs approval from the project administrator. Until then, this account has student access.
-                </p>
-              )}
               {isGuest && (
                 <p className="border-t border-[#142036] pt-2 text-amber-200">
                   Guest progress is saved only in this browser and is not synced to Supabase.
@@ -353,7 +343,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   ))}
                 </div>
                 <p className="text-[10px] leading-relaxed text-slate-400">
-                  Teacher selection requests teacher access; a project administrator must approve it before uploads are enabled.
+                  Teacher accounts can upload shared teaching resources after signing in.
                 </p>
               </fieldset>
             )}

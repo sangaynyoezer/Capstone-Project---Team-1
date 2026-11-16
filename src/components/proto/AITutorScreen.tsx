@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Volume2, VolumeX, RotateCcw, Mic, Send, Sparkles, BookOpen } from 'lucide-react';
-import { askStudyBuddy, supabase } from '../../lib/supabase';
+import { askStudyBuddy, supabase, transcribeStudyBuddyAudio } from '../../lib/supabase';
 
 interface ChatMessage {
   id: string;
@@ -226,11 +226,17 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
     }
   });
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [speechStatus, setSpeechStatus] = useState<string>('');
   const [interimTranscript, setInterimTranscript] = useState<string>('');
   const chatStreamRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceTranscriptRef = useRef<string>('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingStartRef = useRef(false);
+  const useRecorderRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -255,6 +261,15 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
         recognition.onend = null;
         recognition.abort();
       }
+      if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+      const mediaRecorder = mediaRecorderRef.current;
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.ondataavailable = null;
+        mediaRecorder.onstop = null;
+        mediaRecorder.onerror = null;
+        mediaRecorder.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -286,20 +301,154 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
   const handleToggleMic = () => {
     const speechWindow = window as SpeechRecognitionWindow;
     const SpeechRec = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-    if (!SpeechRec) {
-      setSpeechStatus('Voice input is not supported in this browser. Please type your question instead.');
+    const canRecord = Boolean(
+      typeof navigator.mediaDevices?.getUserMedia === 'function' &&
+      typeof window.MediaRecorder !== 'undefined'
+    );
+
+    if (recognitionRef.current) {
+      if (isListening) {
+        recognitionRef.current.stop();
+        setSpeechStatus('Voice input stopped.');
+      }
       return;
     }
 
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setSpeechStatus('Voice input stopped.');
+    if (isTranscribing || recordingStartRef.current) return;
+
+    const mediaRecorder = mediaRecorderRef.current;
+    if (isListening && mediaRecorder?.state === 'recording') {
+      mediaRecorder.stop();
+      setSpeechStatus('Transcribing your question…');
+      return;
+    }
+
+    const startRecording = async () => {
+      recordingStartRef.current = true;
+      if (!supabase || !canRecord) {
+        recordingStartRef.current = false;
+        setSpeechStatus(!canRecord
+          ? 'Voice input is not supported in this browser. Please type your question instead.'
+          : 'Voice transcription is not configured. Please type your question instead.');
+        return;
+      }
+
+      setSpeechStatus('Requesting microphone access…');
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        recordingStartRef.current = false;
+        setSpeechStatus('Microphone access was blocked or unavailable. Allow microphone access, then try again.');
+        setIsListening(false);
+        return;
+      }
+
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream);
+      } catch (error) {
+        recordingStartRef.current = false;
+        stream.getTracks().forEach((track) => track.stop());
+        console.error('Could not create an audio recording:', error);
+        setSpeechStatus('This browser could not record audio. Please type your question instead.');
+        setIsListening(false);
+        return;
+      }
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onerror = (event) => {
+        console.error('Audio recording failed:', event);
+        if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+        recorder.onstop = null;
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorderRef.current = null;
+        mediaStreamRef.current = null;
+        setIsListening(false);
+        setSpeechStatus('Audio recording failed. Please try again or type your question.');
+      };
+      recorder.onstop = () => {
+        if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorderRef.current = null;
+        mediaStreamRef.current = null;
+        setIsListening(false);
+
+        const audio = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        if (audio.size < 1000) {
+          setSpeechStatus('No speech was captured. Tap the microphone and try again.');
+          return;
+        }
+        if (audio.size > 8 * 1024 * 1024) {
+          setSpeechStatus('That recording is too large. Try a shorter question.');
+          return;
+        }
+
+        setIsTranscribing(true);
+        setSpeechStatus('Transcribing your question…');
+        void (async () => {
+          try {
+            const bytes = new Uint8Array(await audio.arrayBuffer());
+            let binary = '';
+            for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+              binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+            }
+            const transcript = await transcribeStudyBuddyAudio(
+              btoa(binary),
+              (audio.type || 'audio/webm').split(';')[0],
+            );
+            if (!transcript.trim()) {
+              setSpeechStatus('No speech was detected. Try again and speak clearly.');
+              return;
+            }
+            setInput((previous) => [previous.trim(), transcript.trim()].filter(Boolean).join(' '));
+            setSpeechStatus('Question captured. Review it, then press Send.');
+          } catch (error) {
+            console.error('Could not transcribe voice input:', error);
+            setSpeechStatus(error instanceof Error
+              ? `Could not transcribe your question: ${error.message}`
+              : 'Could not transcribe your question. Please try again or type it.');
+          } finally {
+            setIsTranscribing(false);
+          }
+        })();
+      };
+
+      mediaRecorderRef.current = recorder;
+      mediaStreamRef.current = stream;
+      try {
+        recorder.start();
+        recordingStartRef.current = false;
+        setIsListening(true);
+        setSpeechStatus('Recording… tap the microphone again when you finish.');
+        recordingTimeoutRef.current = setTimeout(() => {
+          if (recorder.state === 'recording') {
+            recorder.stop();
+            setSpeechStatus('Recording limit reached. Transcribing your question…');
+          }
+        }, 20_000);
+      } catch (error) {
+        recordingStartRef.current = false;
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRecorderRef.current = null;
+        mediaStreamRef.current = null;
+        console.error('Could not start audio recording:', error);
+        setSpeechStatus('Could not start the microphone. Check its browser permission and try again.');
+        setIsListening(false);
+      }
+    };
+
+    if (!SpeechRec || useRecorderRef.current) {
+      void startRecording();
       return;
     }
 
     try {
       const rec = new SpeechRec();
-      rec.lang = 'en-US';
+      rec.lang = 'en-IN';
       rec.continuous = false;
       rec.interimResults = true;
 
@@ -328,11 +477,25 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
       };
 
       rec.onerror = (event) => {
+        if (
+          ['network', 'service-not-allowed', 'language-not-supported'].includes(event.error) &&
+          supabase &&
+          canRecord
+        ) {
+          useRecorderRef.current = true;
+          setSpeechStatus('Browser speech recognition is unavailable. Tap the microphone again to use audio transcription.');
+          setInterimTranscript('');
+          setIsListening(false);
+          if (recognitionRef.current === rec) recognitionRef.current = null;
+          return;
+        }
         const statusByError: Record<string, string> = {
           'not-allowed': 'Microphone access was blocked. Allow microphone access in your browser settings, then try again.',
           'service-not-allowed': 'The browser speech service is unavailable. Check your connection or type your question.',
           'audio-capture': 'No microphone was found. Connect a microphone or type your question.',
-          network: 'Voice recognition needs a network connection. Check your connection or type your question.',
+          network: supabase && canRecord
+            ? 'The browser speech service is unavailable. Tap the microphone again to record and transcribe your question.'
+            : 'The browser speech service is unavailable, and voice transcription is not configured. Please type your question.',
           'no-speech': 'No speech was detected. Try again and speak after the microphone starts.',
           'language-not-supported': 'English voice recognition is unavailable in this browser.',
           aborted: 'Voice input stopped.',
@@ -367,6 +530,11 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
     } catch (error) {
       console.error('Could not start voice input:', error);
       recognitionRef.current = null;
+      if (supabase && canRecord) {
+        useRecorderRef.current = true;
+        setSpeechStatus('Browser speech recognition could not start. Tap the microphone again to use audio transcription.');
+        return;
+      }
       setSpeechStatus('Could not start the microphone. Check its browser permission and try again.');
       setIsListening(false);
     }
@@ -410,7 +578,7 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
       return {
         complete: true,
         answer: combinedAnswer,
-        reply: `That's excellent, ${firstName}! You correctly connected ${matchedIndexes.map((index) => labels[index]).join(' and ')}.\n\nHere's the complete answer: ${previousPrompt.teachingAnswer ?? 'Your answer identifies the important idea. A recognition system collects input, analyzes useful patterns, and uses them to make a decision.'}\n\nYou should feel proud of that reasoning. What would you like to explore next?`,
+        reply: `That's excellent, ${firstName}! You correctly connected ${matchedIndexes.map((index) => labels[index]).join(' and ')}. You should feel proud of that reasoning. What clue helped you reach your answer?`,
       };
     }
 
@@ -1034,13 +1202,14 @@ export const AITutorScreen: React.FC<AITutorScreenProps> = ({ studentId, student
           <button
             type="button"
             onClick={handleToggleMic}
+            disabled={isTranscribing}
             className={`w-11 h-11 rounded-2xl border flex items-center justify-center transition-all ${
               isListening
                 ? 'bg-rose-600 border-rose-500 text-white animate-pulse shadow-[0_0_20px_rgba(225,29,72,0.5)]'
-                : 'bg-[#101a2f] border-[#223556] text-cyan-400 hover:border-cyan-400 hover:text-white'
+                : 'bg-[#101a2f] border-[#223556] text-cyan-400 hover:border-cyan-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
-            title={isListening ? 'Stop listening' : 'Speak your question'}
-            aria-label={isListening ? 'Stop voice input' : 'Speak your question'}
+            title={isTranscribing ? 'Transcribing voice input' : isListening ? 'Stop listening' : 'Speak your question'}
+            aria-label={isTranscribing ? 'Transcribing voice input' : isListening ? 'Stop voice input' : 'Speak your question'}
             aria-pressed={isListening}
           >
             <Mic className="w-5 h-5" />

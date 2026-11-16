@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { isNonNegativeInteger, isRecordOf, usePersistentState } from '../../../hooks/usePersistentState';
 import { 
   ChevronLeft, ChevronRight, Star, ShieldAlert, Check, 
   CheckCircle2, XCircle, ArrowRight, Lightbulb,
@@ -464,15 +465,37 @@ interface Lesson6PresentationProps {
 export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
   onCompleteChapter,
 }) => {
-  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
-  const [earnedStarsMap, setEarnedStarsMap] = useState<Record<number, boolean>>({});
-  const [reflections, setReflections] = useState<Record<number, string>>({
-    1: 'Confident to move on',
-    2: 'Confident to move on',
-    3: 'Confident to move on',
-    4: 'Confident to move on',
-  });
+  const progressKey = 'recognai:presentation:lesson-6:v1';
+  const [currentSlideIndex, setCurrentSlideIndex] = usePersistentState(
+    `${progressKey}:current-slide`,
+    0,
+    (value): value is number => isNonNegativeInteger(value) && value < LESSON6_SLIDES_SEQUENCE.length,
+  );
+  const [selectedAnswers, setSelectedAnswers] = usePersistentState(
+    `${progressKey}:selected-answers`,
+    {},
+    (value): value is Record<number, number> => isRecordOf(value, isNonNegativeInteger),
+  );
+  const [earnedStarsMap, setEarnedStarsMap] = usePersistentState(
+    `${progressKey}:earned-stars`,
+    {},
+    (value): value is Record<number, boolean> => isRecordOf(value, (entry): entry is boolean => typeof entry === 'boolean'),
+  );
+  const [reflections, setReflections] = usePersistentState(
+    `${progressKey}:reflections`,
+    {
+      1: 'Confident to move on',
+      2: 'Confident to move on',
+      3: 'Confident to move on',
+      4: 'Confident to move on',
+    },
+    (value): value is Record<number, string> => isRecordOf(value, (entry): entry is string => typeof entry === 'string'),
+  );
+  const [isReviewRequired, setIsReviewRequired] = usePersistentState(
+    `${progressKey}:review-required`,
+    false,
+    (value): value is boolean => typeof value === 'boolean',
+  );
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [reviewBannerNotice, setReviewBannerNotice] = useState<string | null>(null);
 
@@ -483,6 +506,7 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
   const hasAnsweredCurrentQuestion = currentQId !== undefined && selectedAnswers[currentQId] !== undefined;
 
   const earnedStars = Object.values(earnedStarsMap).filter(Boolean).length;
+  const hasPassedAssessment = earnedStars / 6 >= 0.4;
 
   const handleSelectOption = (optIdx: number) => {
     if (!currentSlide.questionData) return;
@@ -510,13 +534,15 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
   }, [currentSlideIndex, isQuestionSlide, hasAnsweredCurrentQuestion]);
 
   const handlePrevSlide = useCallback(() => {
+    if (isReviewRequired) return;
     if (isQuestionSlide && hasAnsweredCurrentQuestion) return;
     if (currentSlideIndex > 0) {
       setCurrentSlideIndex((prev) => prev - 1);
     }
-  }, [currentSlideIndex, isQuestionSlide, hasAnsweredCurrentQuestion]);
+  }, [currentSlideIndex, isQuestionSlide, hasAnsweredCurrentQuestion, isReviewRequired]);
 
   const handleJumpToSlide = (idx: number) => {
+    if (isReviewRequired && idx !== currentSlideIndex + 1) return;
     if (isQuestionSlide && !hasAnsweredCurrentQuestion && idx > currentSlideIndex) return;
     setCurrentSlideIndex(idx);
   };
@@ -525,16 +551,63 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
     setCurrentSlideIndex(0);
     setSelectedAnswers({});
     setEarnedStarsMap({});
+    setReflections({
+      1: 'Confident to move on',
+      2: 'Confident to move on',
+      3: 'Confident to move on',
+      4: 'Confident to move on',
+    });
     setReviewBannerNotice(null);
+  };
+
+  const handleStartRequiredReview = () => {
+    setIsReviewRequired(true);
+    handleReset();
+  };
+
+  const handleProceedToAssessment = () => {
+    if (!hasPassedAssessment) return;
+    setIsReviewRequired(false);
+    onCompleteChapter();
   };
 
   // USER REQUIREMENT: When student chooses "Needs more work" in reflection, route back to Slide 2 (Limitations Overview)
   const handleSelectNeedsMoreWork = (itemId: number) => {
     setReflections((prev) => ({ ...prev, [itemId]: 'Needs more work' }));
-    setReviewBannerNotice('You marked "Needs more work" on limitations. Review the 6 core limitations below before completing your chapter assessment!');
+    if (!isReviewRequired) {
+      setReviewBannerNotice('You marked "Needs more work" on limitations. Review the 6 core limitations below before completing your chapter assessment!');
+    }
     // Slide 2 is index 1
-    setCurrentSlideIndex(1);
+    if (!isReviewRequired) setCurrentSlideIndex(1);
   };
+
+  useEffect(() => {
+    if (!isAssessmentSlide) return;
+    if (hasPassedAssessment) {
+      setIsReviewRequired(false);
+      return;
+    }
+
+    setIsReviewRequired(true);
+    setCurrentSlideIndex(0);
+    setSelectedAnswers({});
+    setEarnedStarsMap({});
+    setReflections({
+      1: 'Confident to move on',
+      2: 'Confident to move on',
+      3: 'Confident to move on',
+      4: 'Confident to move on',
+    });
+    setReviewBannerNotice(null);
+  }, [
+    hasPassedAssessment,
+    isAssessmentSlide,
+    setCurrentSlideIndex,
+    setEarnedStarsMap,
+    setIsReviewRequired,
+    setReflections,
+    setSelectedAnswers,
+  ]);
 
   const hasAnyGettingThere = Object.values(reflections).some((v) => v === 'Getting there');
   const hasAnyNeedsMoreWork = Object.values(reflections).some((v) => v === 'Needs more work');
@@ -547,7 +620,7 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
         color: 'text-amber-400 border-amber-500/50 bg-amber-950/30',
         desc: 'Outstanding understanding! You have mastered all limitation concepts: environmental lighting errors, biometric privacy ethics, backup procedures for outages, and responsible management.',
       };
-    } else if (stars >= 4) {
+    } else if (stars >= 3) {
       return {
         title: 'Mastery Level: Responsible Technologist ⭐⭐⭐⭐',
         badge: 'Proficient • Passing Grade',
@@ -609,6 +682,12 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
         </div>
       </div>
 
+      {isReviewRequired && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+          Your score was below 40%. Review every slide in order; checkpoint questions will unlock again as you reach them.
+        </div>
+      )}
+
       {/* Review Banner Notice if navigated back from reflection */}
       {reviewBannerNotice && currentSlideIndex === 1 && (
         <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-200 gap-3 animate-fadeIn">
@@ -619,7 +698,7 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
           <button
             onClick={() => {
               setReviewBannerNotice(null);
-              setCurrentSlideIndex(17); // Slide 18 (reflection)
+              handleJumpToSlide(17); // Slide 18 (reflection)
             }}
             className="px-3.5 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-bold hover:bg-amber-300 transition-all cursor-pointer whitespace-nowrap"
           >
@@ -1098,6 +1177,11 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
                     <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
                       {mastery.desc}
                     </p>
+                    {!hasPassedAssessment && (
+                      <p role="alert" className="pt-2 text-sm font-bold text-rose-300">
+                        A passing score is at least 40% (3 of 6 stars). Review every slide, then try again.
+                      </p>
+                    )}
                   </div>
 
                   <div className="max-w-md mx-auto pt-2 space-y-1.5">
@@ -1167,7 +1251,7 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
           {/* Bottom Navigation Bar */}
           <div className="pt-8 border-t border-[#182640] flex items-center justify-between gap-4 mt-6">
             <div>
-              {currentSlideIndex > 0 && !hasAnsweredCurrentQuestion ? (
+              {currentSlideIndex > 0 && !hasAnsweredCurrentQuestion && !isReviewRequired ? (
                 <button
                   onClick={handlePrevSlide}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-[#0f172a] hover:bg-[#16233d] border border-slate-700 transition-colors cursor-pointer"
@@ -1186,6 +1270,7 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
                 <button
                   key={slide.id}
                   onClick={() => handleJumpToSlide(idx)}
+                  disabled={isReviewRequired}
                   className={`w-2 h-2 rounded-full transition-all cursor-pointer ${
                     currentSlideIndex === idx
                       ? 'bg-[#ff6b6b] w-5 shadow-[0_0_8px_#ff6b6b]'
@@ -1218,13 +1303,23 @@ export const Lesson6Presentation: React.FC<Lesson6PresentationProps> = ({
                   <ChevronRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button
-                  onClick={onCompleteChapter}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-[#00f5c4] text-slate-950 hover:bg-[#00dbb0] shadow-[0_0_20px_rgba(0,245,196,0.35)] transition-all hover:scale-[1.02] cursor-pointer"
-                >
-                  <span>Complete Chapter & Claim Certificate</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                hasPassedAssessment ? (
+                  <button
+                    onClick={handleProceedToAssessment}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-[#00f5c4] text-slate-950 hover:bg-[#00dbb0] shadow-[0_0_20px_rgba(0,245,196,0.35)] transition-all hover:scale-[1.02] cursor-pointer"
+                  >
+                    <span>Complete Chapter & Claim Certificate</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStartRequiredReview}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-rose-400 text-slate-950 hover:bg-rose-300 transition-all cursor-pointer"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Review Slides to Continue</span>
+                  </button>
+                )
               )}
             </div>
           </div>

@@ -42,6 +42,18 @@ export const supabase = hasPlaceholderConfig
   ? null
   : createClient(supabaseUrl, supabaseAnonKey);
 
+const guestVoiceSupabase =
+  supabase && supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          storageKey: 'recognai-guest-voice-auth',
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+      })
+    : null;
+
 export async function askStudyBuddy(
   message: string,
   history: TutorChatTurn[],
@@ -72,6 +84,67 @@ export async function askStudyBuddy(
     throw new Error('The AI tutor returned an invalid response.');
   }
   return data;
+}
+
+export async function transcribeStudyBuddyAudio(
+  audioBase64: string,
+  mimeType: string,
+): Promise<string> {
+  if (!supabase || !guestVoiceSupabase) {
+    throw new Error('Supabase is not configured.');
+  }
+
+  const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
+  if (currentSessionError) {
+    throw new Error(`Could not check the sign-in session: ${currentSessionError.message}`);
+  }
+
+  let transcriptionClient = supabase;
+  if (!currentSession.session) {
+    const { data: guestSession, error: guestSessionError } = await guestVoiceSupabase.auth.getSession();
+    if (guestSessionError) {
+      throw new Error(`Could not restore guest voice access: ${guestSessionError.message}`);
+    }
+
+    if (!guestSession.session) {
+      const { data, error } = await guestVoiceSupabase.auth.signInAnonymously();
+      if (error) {
+        if (error.message.toLowerCase().includes('anonymous sign-ins are disabled')) {
+          throw new Error('Guest voice transcription is disabled in Supabase. Enable anonymous sign-ins in Authentication > Providers.');
+        }
+        throw new Error(`Could not start guest voice access: ${error.message}`);
+      }
+      if (!data.session) {
+        throw new Error('Guest voice access could not be started.');
+      }
+    }
+    transcriptionClient = guestVoiceSupabase;
+  }
+
+  const { data, error } = await transcriptionClient.functions.invoke<{ transcript: string }>('study-buddy', {
+    body: { action: 'transcribe', audioBase64, mimeType },
+  });
+  if (error) {
+    let message = error.message;
+    if ('context' in error && error.context instanceof Response) {
+      const payload: unknown = await error.context.clone().json().catch(() => null);
+      if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        'error' in payload &&
+        typeof payload.error === 'string'
+      ) {
+        message = payload.error === 'Enter a question or answer before sending.'
+          ? 'Voice transcription is not deployed yet. Deploy the updated study-buddy Edge Function, then try again.'
+          : payload.error;
+      }
+    }
+    throw new Error(message);
+  }
+  if (!data || typeof data.transcript !== 'string') {
+    throw new Error('Voice transcription returned an invalid response.');
+  }
+  return data.transcript;
 }
 
 export const MAX_RESOURCE_FILE_SIZE = 20 * 1024 * 1024;

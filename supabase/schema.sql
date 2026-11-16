@@ -1,3 +1,37 @@
+create or replace function public.set_signup_account_role()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  new.raw_app_meta_data := coalesce(new.raw_app_meta_data, '{}'::jsonb)
+    || jsonb_build_object(
+      'role',
+      coalesce(
+        new.raw_app_meta_data ->> 'role',
+        case
+          when new.raw_user_meta_data ->> 'account_type' = 'teacher' then 'teacher'
+          else 'student'
+        end
+      )
+    );
+  return new;
+end;
+$$;
+
+revoke all on function public.set_signup_account_role() from public, anon, authenticated;
+
+drop trigger if exists set_signup_account_role on auth.users;
+create trigger set_signup_account_role
+  before insert on auth.users
+  for each row execute function public.set_signup_account_role();
+
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"teacher"}'::jsonb
+where raw_user_meta_data ->> 'account_type' = 'teacher'
+  and raw_app_meta_data ->> 'role' is distinct from 'teacher';
+
 create table if not exists public.course_progress (
   user_id uuid primary key references auth.users (id) on delete cascade,
   unlocked_lessons text[] not null default array['lesson-1']::text[],
