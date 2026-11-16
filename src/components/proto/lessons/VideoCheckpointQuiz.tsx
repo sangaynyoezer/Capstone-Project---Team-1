@@ -4,6 +4,7 @@ import {
   HelpCircle, Check, Sparkles, Layers, ListOrdered
 } from 'lucide-react';
 import { getVideoQuizPassingScore, VideoQuizQuestion } from './videoQuizData';
+import { createShuffledIndices } from '../../../utils/quizUtils';
 
 interface VideoCheckpointQuizProps {
   quizTitle: string;
@@ -24,6 +25,12 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
 }) => {
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [selectedMcqOption, setSelectedMcqOption] = useState<number | null>(null);
+  const [optionOrders] = useState<number[][]>(() =>
+    questions.map((question) => createShuffledIndices(question.options?.length ?? 0)),
+  );
+  const [matchingOrders] = useState<number[][]>(() =>
+    questions.map((question) => createShuffledIndices(question.matchingPairs?.length ?? 0)),
+  );
   
   // Matching question state
   const [selectedLeft, setSelectedLeft] = useState<number | null>(null);
@@ -36,6 +43,8 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
   const [isFinished, setIsFinished] = useState<boolean>(isAlreadyCompleted);
 
   const currentQ = questions[currentIdx];
+  const currentOptionOrder = optionOrders[currentIdx] ?? [];
+  const currentMatchingOrder = matchingOrders[currentIdx] ?? [];
   const totalQuestions = questions.length;
   const answeredScore = Object.values(answeredResults).filter(Boolean).length;
   const score = isAlreadyCompleted ? completedScore ?? answeredScore : answeredScore;
@@ -56,10 +65,16 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
 
   const handleMatchRight = (rightIdx: number) => {
     if (isQuestionSubmitted || selectedLeft === null) return;
-    setUserMatches(prev => ({
-      ...prev,
-      [selectedLeft]: rightIdx,
-    }));
+    setUserMatches((prev) => {
+      const nextMatches = { ...prev };
+      Object.entries(nextMatches).forEach(([leftIdx, matchedRightIdx]) => {
+        if (Number(leftIdx) !== selectedLeft && matchedRightIdx === rightIdx) {
+          delete nextMatches[Number(leftIdx)];
+        }
+      });
+      nextMatches[selectedLeft] = rightIdx;
+      return nextMatches;
+    });
     setSelectedLeft(null);
   };
 
@@ -77,7 +92,7 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
       const totalPairs = pairs.length;
       let matchedCorrectly = 0;
       for (let i = 0; i < totalPairs; i++) {
-        if (userMatches[i] === i) {
+        if (currentMatchingOrder[userMatches[i]] === i) {
           matchedCorrectly++;
         }
       }
@@ -215,9 +230,10 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
           {/* 1. MCQ Options */}
           {(currentQ.type === 'mcq' || currentQ.type === 'fill_blank') && currentQ.options && (
             <div className="space-y-2.5">
-              {currentQ.options.map((opt, idx) => {
-                const isSelected = selectedMcqOption === idx;
-                const isCorrect = idx === currentQ.correctOptionIndex;
+              {currentOptionOrder.map((optionIdx, displayIdx) => {
+                const opt = currentQ.options![optionIdx];
+                const isSelected = selectedMcqOption === optionIdx;
+                const isCorrect = optionIdx === currentQ.correctOptionIndex;
                 
                 let btnStyle = 'bg-[#0f172a] border-[#223555] text-slate-200 hover:border-slate-500';
                 if (isQuestionSubmitted) {
@@ -234,15 +250,15 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
 
                 return (
                   <button
-                    key={idx}
+                    key={optionIdx}
                     type="button"
                     disabled={isQuestionSubmitted}
-                    onClick={() => handleSelectOption(idx)}
+                    onClick={() => handleSelectOption(optionIdx)}
                     className={`w-full p-4 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-center justify-between gap-3 cursor-pointer disabled:cursor-default ${btnStyle}`}
                   >
                     <div className="flex items-center gap-3">
                       <span className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0">
-                        {String.fromCharCode(65 + idx)}
+                        {String.fromCharCode(65 + displayIdx)}
                       </span>
                       <span>{opt}</span>
                     </div>
@@ -307,7 +323,8 @@ export const VideoCheckpointQuiz: React.FC<VideoCheckpointQuizProps> = ({
                   <span className="text-[11px] font-mono font-bold text-slate-400 uppercase">
                     Definitions / Roles
                   </span>
-                  {currentQ.matchingPairs.map((pair, rightIdx) => {
+                  {currentMatchingOrder.map((pairIdx, rightIdx) => {
+                    const pair = currentQ.matchingPairs![pairIdx];
                     const linkedByLeft = Object.entries(userMatches).find(([_, r]) => r === rightIdx);
 
                     return (

@@ -3,6 +3,7 @@ import { Trophy, Award, CheckCircle2, ArrowRight, ArrowLeft, RefreshCw, Printer,
 import { COURSE_MATERIALS, QuizQuestion } from '../../materialsConfig';
 import confetti from 'canvas-confetti';
 import { assetUrl } from '../../utils/assetUrl';
+import { createShuffledIndices } from '../../utils/quizUtils';
 
 interface AssessmentScreenProps {
   lessonsCompletedCount: number;
@@ -25,10 +26,14 @@ export const AssessmentScreen: React.FC<AssessmentScreenProps> = ({
 }) => {
   const questions: QuizQuestion[] = COURSE_MATERIALS.quizzes.assessmentDiagnostic;
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [optionOrders] = useState<number[][]>(() =>
+    questions.map((question) => createShuffledIndices(question.options.length)),
+  );
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [showCertificateModal, setShowCertificateModal] = useState<boolean>(false);
 
   const currentQ = questions[currentQuestionIndex] || questions[0];
+  const currentOptionOrder = optionOrders[currentQuestionIndex] ?? [];
   const userSelectedOption = selectedAnswers[currentQuestionIndex];
   const isCurrentAnswered = userSelectedOption !== undefined;
 
@@ -215,9 +220,10 @@ export const AssessmentScreen: React.FC<AssessmentScreenProps> = ({
 
               {/* Radio Options */}
               <div className="space-y-3 pt-2">
-                {currentQ.options.map((opt, idx) => {
-                  const isSelected = userSelectedOption === idx;
-                  const isCorrect = idx === currentQ.correctAnswerIndex;
+                {currentOptionOrder.map((optionIdx) => {
+                  const opt = currentQ.options[optionIdx];
+                  const isSelected = userSelectedOption === optionIdx;
+                  const isCorrect = optionIdx === currentQ.correctAnswerIndex;
                   
                   let optStyle = 'bg-[#0e1629] border-[#1d2d4c] text-slate-300 hover:border-slate-500 cursor-pointer';
 
@@ -235,8 +241,8 @@ export const AssessmentScreen: React.FC<AssessmentScreenProps> = ({
 
                   return (
                     <div
-                      key={idx}
-                      onClick={() => handleSelectOption(idx)}
+                      key={optionIdx}
+                      onClick={() => handleSelectOption(optionIdx)}
                       className={`p-4 rounded-xl border text-xs sm:text-sm flex items-center gap-3.5 transition-all ${optStyle}`}
                     >
                       <div

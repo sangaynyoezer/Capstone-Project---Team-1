@@ -39,7 +39,7 @@ export const CreatorsModal: React.FC<CreatorsModalProps> = ({ isOpen, onClose })
       studentId: '08230193',
     },
     {
-      name: 'Rinche Dema',
+      name: 'Rinchen Dema',
       role: 'Assessment & Pedagogical Evaluator',
       email: '08230177.sce@rub.edu.bt',
       studentId: '08230177',
