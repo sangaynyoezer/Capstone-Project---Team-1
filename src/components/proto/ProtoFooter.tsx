@@ -110,32 +110,12 @@ export const ProtoFooter: React.FC<ProtoFooterProps> = ({ onNavigateTab }) => {
 
           <div className="flex items-center gap-4 text-slate-400">
             <a
-              href="https://youtu.be/PUE9JxUIaC0"
+              href="https://www.youtube.com/@RecognAI"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-white transition-colors"
-              aria-label="Watch the AI Recognition Cycle video on YouTube"
-              title="AI Recognition Cycle"
-            >
-              <Youtube className="w-5 h-5" />
-            </a>
-            <a
-              href="https://youtu.be/_DnfUSonn5k"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-white transition-colors"
-              aria-label="Watch the Types of Recognition Systems video on YouTube"
-              title="Types of Recognition Systems"
-            >
-              <Youtube className="w-5 h-5" />
-            </a>
-            <a
-              href="https://youtu.be/CdpsGjuaXaQ"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-white transition-colors"
-              aria-label="Watch the AI Recognition in the Real World video on YouTube"
-              title="AI Recognition in the Real World"
+              aria-label="Visit the RecognAI YouTube channel"
+              title="RecognAI on YouTube"
             >
               <Youtube className="w-5 h-5" />
             </a>
