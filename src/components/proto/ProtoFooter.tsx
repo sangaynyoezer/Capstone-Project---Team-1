@@ -1,5 +1,5 @@
 import React from 'react';
-import { Github, Twitter, Facebook, Video } from 'lucide-react';
+import { Youtube } from 'lucide-react';
 import { assetUrl } from '../../utils/assetUrl';
 
 interface ProtoFooterProps {
@@ -109,17 +109,35 @@ export const ProtoFooter: React.FC<ProtoFooterProps> = ({ onNavigateTab }) => {
           </div>
 
           <div className="flex items-center gap-4 text-slate-400">
-            <a href="#facebook" className="hover:text-white transition-colors" aria-label="Facebook">
-              <Facebook className="w-4 h-4" />
+            <a
+              href="https://youtu.be/PUE9JxUIaC0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+              aria-label="Watch the AI Recognition Cycle video on YouTube"
+              title="AI Recognition Cycle"
+            >
+              <Youtube className="w-5 h-5" />
             </a>
-            <a href="#twitter" className="hover:text-white transition-colors" aria-label="Twitter">
-              <Twitter className="w-4 h-4" />
+            <a
+              href="https://youtu.be/_DnfUSonn5k"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+              aria-label="Watch the Types of Recognition Systems video on YouTube"
+              title="Types of Recognition Systems"
+            >
+              <Youtube className="w-5 h-5" />
             </a>
-            <a href="#video" className="hover:text-white transition-colors" aria-label="Video">
-              <Video className="w-4 h-4" />
-            </a>
-            <a href="#github" className="hover:text-white transition-colors" aria-label="GitHub">
-              <Github className="w-4 h-4" />
+            <a
+              href="https://youtu.be/CdpsGjuaXaQ"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+              aria-label="Watch the AI Recognition in the Real World video on YouTube"
+              title="AI Recognition in the Real World"
+            >
+              <Youtube className="w-5 h-5" />
             </a>
           </div>
         </div>
